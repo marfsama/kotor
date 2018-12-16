@@ -102,3 +102,6 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# Non-Free Aurora Documentation. 
+aurora/

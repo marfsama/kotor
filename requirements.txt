@@ -1,0 +1,6 @@
+pyglet
+PyOpenGL
+pyshaders
+pyglbuffers
+pillow
+hurry.filesize > 0.9
