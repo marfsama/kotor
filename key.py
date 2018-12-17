@@ -93,7 +93,7 @@ class KeyEntry:
         self.bifIndex = self.id & 0xFFFFF
 
     def __str__(self):
-        return """KeyEntry: {{name: {name}, type: {type}, id: 0x{id:x}, bif: {bifFile}, index:0x{bifIndex:x}, bif:{bifName}}}""".format(**vars(self))
+        return """KeyEntry: {{name: {name}, type: {type}, id: 0x{id:x}, bifFile: {bifFile}, bifIndex:0x{bifIndex:x}, bifName:{bifName}}}""".format(**vars(self))
 
 
 class BuildDate:
@@ -135,10 +135,14 @@ def list_bif_files(keyFile):
     for entry in keyFile.entries:
         print ("{:>7} {:>7} {}".format(size(entry.size), len(keyFile.fileDirectory[entry.name]) , entry.name))
 
+def get_absolute_bif_filename(keyFile, bifFile):
+    path = os.path.dirname(keyFile.path)
+    return os.path.join(path, bifFile)
+    
+
 def list_bif_contents(keyFile, bifFile):
     bifEntries = keyFile.fileDirectory[bifFile]
-    path = os.path.dirname(keyFile.path)
-    bifPath = os.path.join(path, bifFile)
+    bifPath =  get_absolute_bif_filename(keyFile, bifFile)
     bifDirectory = bif.read_bif_directory(bifPath)
 
     print ("{:>7} {:>7} {:>7} {}".format('index', 'size', 'filename', 'type'))
@@ -171,16 +175,24 @@ def extract_entry(parsed, keyFile):
         print("error: nothing to extract.")
         return
 
+    bif_path = get_absolute_bif_filename(keyFile, bifFile)
+    # read bif directory
+    bifDirectory = bif.read_bif_directory(bif_path)
     # remove file extensions
     filesToExtract = [os.path.splitext(file)[0] for file in parsed.files]
-    print("filesToExtract", filesToExtract)
-
     # find bifEntries for specified filenames
     bifEntries = keyFile.fileDirectory[bifFile]
-    print (*bifEntries, sep='\n')
-    bifEntriesToExtract = [entry for entry in bifEntries if entry.name in filesToExtract)]
+    bifEntriesToExtract = [entry for entry in bifEntries if entry.name in filesToExtract]
 
-    print("extract", bifEntriesToExtract)
+    with open(bif_path, "rb") as bif_file:
+        for entry in bifEntriesToExtract:
+            with open("{}.{}".format(entry.name, entry.type.extension), "wb") as destination_file:
+                bifEntry = bifDirectory[entry.bifIndex];
+                for chunk in bif.read_bif_file (bif_file, bifEntry):
+                    destination_file.write(chunk)
+
+
+
 
 def checkEntryName(entry, filesToExtract):
     for file in filesToExtract:
