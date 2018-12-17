@@ -2,16 +2,13 @@
 
 import struct
 import argparse
-
+import os
+import bif
 
 from functools import partial
 from tools import *
 from datetime import datetime, timedelta
 from hurry.filesize import size
-
-
-basePath = "/home/mtotz/.local/share/Steam/steamapps/common/Knights of the Old Republic II/steamassets"
-keyFile = "chitin.key"
 
 class RessourceType:
     def __init__(self, id, extension, description):
@@ -88,7 +85,7 @@ class FileEntry:
 
 class KeyEntry:
     def __init__(self, file):
-        self.name = file.read(16).decode("utf-8")
+        self.name = file.read(16).partition(b'\0')[0].decode("utf-8")
         resourceTypeId = read16(file)
         self.type = ressourceTypeTable.get(resourceTypeId, RessourceType(resourceTypeId, 'NA{}'.format(resourceTypeId), 'Invalid resource type'))
         self.id = read32(file)
@@ -96,7 +93,7 @@ class KeyEntry:
         self.bifIndex = self.id & 0xFFFFF
 
     def __str__(self):
-        return """KeyEntry: {{name: {name}, type: 0x{type:x}, id: 0x{id:x}, bif: {bifFile}, index:0x{bifIndex:x}, bif:{bifName}}}""".format(**vars(self))
+        return """KeyEntry: {{name: {name}, type: {type}, id: 0x{id:x}, bif: {bifFile}, index:0x{bifIndex:x}, bif:{bifName}}}""".format(**vars(self))
 
 
 class BuildDate:
@@ -138,27 +135,59 @@ def list_bif_files(keyFile):
     for entry in keyFile.entries:
         print ("{:>7} {:>7} {}".format(size(entry.size), len(keyFile.fileDirectory[entry.name]) , entry.name))
 
-def list_bif_contents(bifEntries):
+def list_bif_contents(keyFile, bifFile):
+    bifEntries = keyFile.fileDirectory[bifFile]
+    path = os.path.dirname(keyFile.path)
+    bifPath = os.path.join(path, bifFile)
+    bifDirectory = bif.read_bif_directory(bifPath)
+
     print ("{:>7} {:>7} {:>7} {}".format('index', 'size', 'filename', 'type'))
 
     for entry in bifEntries:
-        print ("{:>7} {:>7} {}.{}".format(entry.bifIndex, 0, entry.name , entry.type.extension))
-    pass
+        print ("{:>7} {:>7} {}.{}".format(entry.bifIndex, bifDirectory[entry.bifIndex].size, entry.name , entry.type.extension))
 
 
 def list_entries(parsed, keyFile):
     bifFile = parsed.bifFile
     if bifFile:
         if bifFile in keyFile.fileDirectory:
-            list_bif_contents(keyFile.fileDirectory[bifFile])
+            list_bif_contents(keyFile, bifFile)
         else:
-            print("error: bif file '{}' not found".format(bifFile))
+            print("error: bif file '{}' not found in {}".format(bifFile, keyFile.path))
 
     else:
         list_bif_files(keyFile)
 
 def extract_entry(parsed, keyFile):
-    pass
+    bifFile = parsed.bifFile
+    if not bifFile:
+        print ("error: need to supply bif file")
+        return
+    if bifFile not in keyFile.fileDirectory:
+        print("error: bif file '{}' not found in {}".format(bifFile, keyFile.path))
+        return
+
+    if not parsed.files:
+        print("error: nothing to extract.")
+        return
+
+    # remove file extensions
+    filesToExtract = [os.path.splitext(file)[0] for file in parsed.files]
+    print("filesToExtract", filesToExtract)
+
+    # find bifEntries for specified filenames
+    bifEntries = keyFile.fileDirectory[bifFile]
+    print (*bifEntries, sep='\n')
+    bifEntriesToExtract = [entry for entry in bifEntries if checkEntryName(entry, filesToExtract)]
+
+    print("extract", bifEntriesToExtract)
+
+def checkEntryName(entry, filesToExtract):
+    for file in filesToExtract:
+        print (file, entry.name, type(file), type(entry.name), ":".join("{:02x}".format(ord(c)) for c in file), ":".join("{:02x}".format(ord(c)) for c in entry.name), len(file), len(entry.name))
+        if file == entry.name:
+            return True
+    return False
 
 def update_entry(parsed, keyFile):
     pass
@@ -187,7 +216,7 @@ def readKeyDirectory(fileName):
         # Read File Name for each entry
         for entry in entries:
             file.seek(entry.nameOffset)
-            entry.name = file.read(entry.nameSize).partition(b'\0')[0].decode("utf-8")
+            entry.name = file.read(entry.nameSize).partition(b'\0')[0].decode("utf-8").replace('\\', os.sep)
 
         # read all key entries
         file.seek(header.keyOffset)
@@ -206,16 +235,16 @@ def parse_command_line():
     parser = argparse.ArgumentParser(description='Process KEY and BIF files.')
     parser.add_argument('keyFile', help='path to key file (i.e. chitinkey)')
     parser.add_argument('bifFile', nargs='?', help='bif file referenced from key file')
-    parser.add_argument('file', nargs='*', help='file to extract, delete or update (without extension)')
+    parser.add_argument('files', nargs='*', help='file to extract, delete or update (without extension)')
     parser.add_argument('-l', action='store_const', dest='action', const='list', help='List contents of bif or key file')
-    parser.add_argument('-u', action='store_const', dest='action', const='update', help='updates a file bif or key file')
+    parser.add_argument('-u', action='store_const', dest='action', const='update', help='Updates a file bif or key file')
     parser.add_argument('-x', action='store_const', dest='action', const='extract', help='Extract file <file> from bif file')
     parser.add_argument('-d', action='store_const', dest='action', const='delete', help='Delete file <file> from bif file')
+    parser.add_argument('--dir', action='store', dest='directory', help='Directory from where to read or where to write to. Defaults to current directory.')
+
     parsed = parser.parse_args()
 
     keyFile = readKeyDirectory(parsed.keyFile)
-    print(keyFile)
-
     execute_action(parsed, keyFile)
 
 
