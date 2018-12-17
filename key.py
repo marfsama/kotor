@@ -178,7 +178,7 @@ def extract_entry(parsed, keyFile):
     # find bifEntries for specified filenames
     bifEntries = keyFile.fileDirectory[bifFile]
     print (*bifEntries, sep='\n')
-    bifEntriesToExtract = [entry for entry in bifEntries if checkEntryName(entry, filesToExtract)]
+    bifEntriesToExtract = [entry for entry in bifEntries if entry.name in filesToExtract)]
 
     print("extract", bifEntriesToExtract)
 
