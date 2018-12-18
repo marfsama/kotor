@@ -88,7 +88,7 @@ def read_file(file_name):
 
         # parse cell contents from string data
         cell_offset_index = 0
-        rows = OrderedDict()
+        rows = OrderedDict() # note: use OrderedDict to keep entries and iterations in insertion order
         for row_index in row_indices:
             row = []
             for column_name in column_names:
