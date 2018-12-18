@@ -1,4 +1,4 @@
-# Byte-compiled / optimized / DLL files
+7# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -105,3 +105,5 @@ venv.bak/
 
 # Non-Free Aurora Documentation. 
 aurora/
+# Unpacked work data from KotoR
+data/

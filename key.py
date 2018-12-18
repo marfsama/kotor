@@ -249,9 +249,9 @@ def parse_command_line():
     parser.add_argument('bifFile', nargs='?', help='bif file referenced from key file')
     parser.add_argument('files', nargs='*', help='file to extract, delete or update (without extension)')
     parser.add_argument('-l', action='store_const', dest='action', const='list', help='List contents of bif or key file')
-    parser.add_argument('-u', action='store_const', dest='action', const='update', help='Updates a file bif or key file')
     parser.add_argument('-x', action='store_const', dest='action', const='extract', help='Extract file <file> from bif file')
-    parser.add_argument('-d', action='store_const', dest='action', const='delete', help='Delete file <file> from bif file')
+    parser.add_argument('-u', action='store_const', dest='action', const='update', help='Updates a file bif or key file (not yet implemented)')
+    parser.add_argument('-d', action='store_const', dest='action', const='delete', help='Delete file <file> from bif file  (not yet implemented)')
     parser.add_argument('--dir', action='store', dest='directory', help='Directory from where to read or where to write to. Defaults to current directory.')
 
     parsed = parser.parse_args()
