@@ -40,7 +40,7 @@ See official Bioware Documentation.
 
 | Name            | Type              | Description  |
 |-----------------|-------------------|--------------|
-| row_count       | word              | # of rows    |
+| row_count       | dword             | # of rows    |
 | n * row_index   | n * chars + byte  | each row name is terminated by tab char (0x09). n = row count|
 
 Note: The row index list is not terminated by 0x00 byte. Just read as many row indices as indicated by row_count

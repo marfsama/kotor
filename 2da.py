@@ -5,7 +5,7 @@ import os
 import io
 import itertools
 
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from tools import *
 from collections import OrderedDict
 
@@ -144,11 +144,63 @@ def extract_excel(parsed):
     wb.save(output_filename)
     pass
 
-def create_file(parsed, tabular_data_file):
-    
-    pass
+def read_excel_file(filename):
+    wb = load_workbook(filename=filename, read_only=True)
+    ws = wb.active
 
-def error(parsed, tabular_data_file):
+    sheet_rows = list(ws.rows)
+
+    # first line is column names (skip first column, which is the row index)
+    column_names = [cell.value for cell in sheet_rows[0][1:]]
+
+
+    # read rows, saving the row index separately
+    # note: use OrderedDict to keep entries and iterations in insertion order
+    rows = OrderedDict()
+    for row in sheet_rows[1:]:
+        row_index = row[0].value
+        rows[row_index] = [cell.value for cell in row[1:]]
+
+    return TabularDataFile(column_names, rows)
+
+def write_2da_file(output_filename, tabular_data_file):
+    print('writing 2da file:', output_filename)
+    with open(output_filename, 'wb') as file:
+        # write header
+        file.write('2DA V2.b'.encode('utf-8'))
+        # write newline
+        file.write(bytes([0xa]))
+        # write column names, each terminated by tab (0x9)
+        for column_name in tabular_data_file.column_names:
+            file.write(column_name.encode('utf-8'))
+            file.write(bytes([0x9]))
+        # terminate column names list by 0x0
+        file.write(bytes([0]))
+        # write number of rows
+        file.write((len(tabular_data_file.rows)).to_bytes(4, byteorder='little'))
+        # write row indices, each terminated by tab (0x9)
+        for row_name in tabular_data_file.rows:
+            file.write(row_name.encode('utf-8'))
+            file.write(bytes([0x9]))
+
+def create_file(parsed):
+    if (parsed.input.endswith('xlsx')):
+        tabular_data_file = read_excel_file(parsed.input);
+    else:
+        print('unknown input file format')
+        return
+
+    if parsed.output:
+        output_filename = parsed.output
+    else:
+        filename = os.path.split(parsed.input)[1]
+        basename = os.path.splitext(filename)[0]
+        output_filename = basename+'.2da'
+
+    write_2da_file(output_filename, tabular_data_file)
+
+
+def error(output_filename, tabular_data_file):
     print("You need to specify one of -x, -c")
 
 def execute_action(parsed):
