@@ -26,6 +26,27 @@ optional arguments:
                    to current directory.
 ```
 
+## erf.py
+
+```
+usage: erf.py [-h] [-l] [-x] [-u] [-d] [--dir DIRECTORY] input file
+
+Process ERF files.
+
+positional arguments:
+  input            path to erf file
+  file             file to extract/delete/update
+
+optional arguments:
+  -h, --help       show this help message and exit
+  -l               List contents of bif or key file
+  -x               Extract file <file> from erf file
+  -u               Updates a file entry in erf file (not yet implemented)
+  -d               Delete file <file> from erf file (not yet implemented)
+  --dir DIRECTORY  Directory from where to read or where to write to. Defaults
+                   to current directory. (not yet implemented)
+```
+
 
 ## 2da.py
 
