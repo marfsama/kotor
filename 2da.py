@@ -101,18 +101,20 @@ def read_file(file_name):
         return TabularDataFile(column_names, rows)
 
 def get_output_filename(parsed):
-    if parsed.output_filename:
-        return parsed.output_filename
-    basename = os.path.splitext(parsed.file)[0]
+    if parsed.output:
+        return parsed.output
+    filename = os.path.split(parsed.input)[1]
+    basename = os.path.splitext(filename)[0]
     format_extensions = {
         "excel" : "xlsx",
         "csv" : "csv"
     }
     return basename + '.' + format_extensions[parsed.format]
 
-def extract_csv(parsed, tabular_data_file):
+def extract_csv(parsed):
+    tabular_data_file = read_file(parsed.input)
     output_filename = get_output_filename(parsed)
-    csv_delimiter = parsed.csvdelim
+    csv_delimiter = parsed.csvsep
 
     print('extract csv to', output_filename)
     with open(output_filename, 'w') as output:
@@ -125,7 +127,8 @@ def extract_csv(parsed, tabular_data_file):
             output.write('\n')
 
 
-def extract_excel(parsed, tabular_data_file):
+def extract_excel(parsed):
+    tabular_data_file = read_file(parsed.input)
     output_filename = get_output_filename(parsed)
     print('extract excel to', output_filename)
     wb = Workbook()
@@ -142,12 +145,13 @@ def extract_excel(parsed, tabular_data_file):
     pass
 
 def create_file(parsed, tabular_data_file):
+    
     pass
 
 def error(parsed, tabular_data_file):
     print("You need to specify one of -x, -c")
 
-def execute_action(parsed, tabular_data_file):
+def execute_action(parsed):
     function = parsed.action+"_"+parsed.format
     switcher= {
         "extract_csv" : extract_csv,
@@ -156,22 +160,20 @@ def execute_action(parsed, tabular_data_file):
         "create_excel" : create_file
     }
     func = switcher.get(function, error)
-    func(parsed, tabular_data_file)
+    func(parsed)
 
 
 def parse_command_line():
     parser = argparse.ArgumentParser(description='Process 2DA files.')
-    parser.add_argument('file', metavar='2dafile', help='path to 2da file')
+    parser.add_argument('input', help='input file')
+    parser.add_argument('output', nargs='?', help='output file (default: derive filename from input file and format)')
     parser.add_argument('-x', action='store_const', dest='action', const='extract', help='extract 2da file')
     parser.add_argument('-c', action='store_const', dest='action', const='create', help='create 2da file (Not Yet Implemented)')
-    parser.add_argument('-o', dest='output_filename', help='output filename. (default: derive filename from input file and format)')
     parser.add_argument('-f', choices=['csv', 'excel'], dest='format', default='csv', help='input format: csv or excel. (default: csv)')
-    parser.add_argument('--csvdelim', nargs='?', const=',', default=',', help="set csv delimiter (default: comma ',')")
+    parser.add_argument('--csvsep', nargs='?', const=',', default=',', help="set csv separator (default: comma ',')")
 
     parsed = parser.parse_args()
-
-    tabular_data_file = read_file(parsed.file)
-    execute_action(parsed, tabular_data_file)
+    execute_action(parsed)
 
 
 def main():

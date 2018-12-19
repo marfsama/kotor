@@ -4,3 +4,4 @@ pyshaders
 pyglbuffers
 pillow
 hurry.filesize > 0.9
+openpyxl
