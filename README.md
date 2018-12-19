@@ -32,24 +32,22 @@ optional arguments:
 Convert 2da files (tabular data) to excel/csv and vice versa.
 
 ```
-usage: 2da.py [-h] [-x] [-c] [-o OUTPUT_FILENAME] [-f {csv,excel}]
-              [--csvdelim [CSVDELIM]]
-              2dafile
+usage: 2da.py [-h] [-x] [-c] [-f {csv,excel}] [--csvsep [CSVSEP]]
+              input [output]
 
 Process 2DA files.
 
 positional arguments:
-  2dafile               path to 2da file
+  input              input file
+  output             output file (default: derive filename from input file and
+                     format)
 
 optional arguments:
-  -h, --help            show this help message and exit
-  -x                    extract 2da file
-  -c                    create 2da file (Not Yet Implemented)
-  -o OUTPUT_FILENAME    output filename. (default: derive filename from input
-                        file and format)
-  -f {csv,excel}        input format: csv or excel. (default: csv)
-  --csvdelim [CSVDELIM]
-                        set csv delimiter (default: comma ',')
+  -h, --help         show this help message and exit
+  -x                 extract 2da file
+  -c                 create 2da file
+  -f {csv,excel}     input format: csv or excel. (default: csv)
+  --csvsep [CSVSEP]  set csv separator (default: comma ',')
 ```
 
 ## Alternatives

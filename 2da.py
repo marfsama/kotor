@@ -4,6 +4,8 @@ import argparse
 import os
 import io
 import itertools
+import csv 
+
 
 from openpyxl import Workbook, load_workbook
 from tools import *
@@ -142,9 +144,9 @@ def extract_excel(parsed):
 
     # Save the file
     wb.save(output_filename)
-    pass
 
-def read_excel_file(filename):
+
+def read_excel_file(filename, parsed):
     wb = load_workbook(filename=filename, read_only=True)
     ws = wb.active
 
@@ -162,6 +164,25 @@ def read_excel_file(filename):
         rows[row_index] = [cell.value for cell in row[1:]]
 
     return TabularDataFile(column_names, rows)
+
+
+def read_csv_file(filename, parsed):
+    with open(filename) as csvfile:
+        csvreader = csv.reader(csvfile, delimiter=parsed.csvsep, quotechar='"')
+
+        csv_rows = list(csvreader)
+        column_names = [row for row in csv_rows[0][1:]]
+
+        # read rows, saving the row index separately
+        # note: use OrderedDict to keep entries and iterations in insertion order
+        rows = OrderedDict()    
+        for row in csv_rows[1:]:
+            row_index = row[0]
+            rows[row_index] = [cell for cell in row[1:]]
+
+    return TabularDataFile(column_names, rows)
+    
+
 
 def write_2da_file(output_filename, tabular_data_file):
     print('writing 2da file:', output_filename)
@@ -183,12 +204,58 @@ def write_2da_file(output_filename, tabular_data_file):
             file.write(row_name.encode('utf-8'))
             file.write(bytes([0x9]))
 
+        # create cell values table
+        # note: we use OrderedDict because we want to write the values in the order of the first occurenced
+        unique_cell_values = OrderedDict()
+        for row in tabular_data_file.rows.values():
+            for cell in row:
+                # empty cell is ""
+                if not cell:
+                    value = ""
+                else:
+                    value = cell
+                # if the value was not encountered before, save it.
+                if not value in unique_cell_values:
+                    unique_cell_values[value] = 0
+
+        # write the cell values in byte stream, remembering the position it was written
+        cell_values_offsets = {}
+        byte_io = io.BytesIO()
+        for value in unique_cell_values:
+            cell_values_offsets[value] = byte_io.tell()
+            byte_io.write(value.encode("utf-8"))
+            byte_io.write(bytes([0]))
+        # get bytes stream from BytesIO
+        cell_values_stream = byte_io.getvalue()
+
+        # write cell offsets 
+        for row in tabular_data_file.rows.values():
+            for cell in row:
+                # empty cell is ""
+                if not cell:
+                    value = ""
+                else:
+                    value = cell
+                offset = cell_values_offsets[value]
+                file.write((offset).to_bytes(2, byteorder='little'))
+        # write cell values data stream size 
+        file.write((len(cell_values_stream)).to_bytes(2, byteorder='little'))
+        # write cell values data
+        file.write(cell_values_stream)
+
 def create_file(parsed):
-    if (parsed.input.endswith('xlsx')):
-        tabular_data_file = read_excel_file(parsed.input);
-    else:
-        print('unknown input file format')
+    switcher= {
+        ".csv" : read_csv_file,
+        ".xlsx" : read_excel_file
+    }
+
+    extension = os.path.splitext(parsed.input)[1]
+    func = switcher.get(extension);
+    if not func:
+        print('unsupported file format')
         return
+    
+    tabular_data_file = func(parsed.input, parsed)
 
     if parsed.output:
         output_filename = parsed.output
@@ -220,7 +287,7 @@ def parse_command_line():
     parser.add_argument('input', help='input file')
     parser.add_argument('output', nargs='?', help='output file (default: derive filename from input file and format)')
     parser.add_argument('-x', action='store_const', dest='action', const='extract', help='extract 2da file')
-    parser.add_argument('-c', action='store_const', dest='action', const='create', help='create 2da file (Not Yet Implemented)')
+    parser.add_argument('-c', action='store_const', dest='action', const='create', help='create 2da file')
     parser.add_argument('-f', choices=['csv', 'excel'], dest='format', default='csv', help='input format: csv or excel. (default: csv)')
     parser.add_argument('--csvsep', nargs='?', const=',', default=',', help="set csv separator (default: comma ',')")
 
