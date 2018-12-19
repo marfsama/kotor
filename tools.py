@@ -51,3 +51,23 @@ def printHexListMultiLine(name, numbers):
 def toHex(list):
     return ["0x{0:x}".format(s) for s in list] 
 
+# size of byte chunks to read
+CHUNK_SIZE = 4096
+
+def read_partial_stream(file, offset, size):
+    """
+        returns an iterator over 4k blocks of byte data
+        @param file an IOBase Stream, i.e. File
+        @param offset offset from where to read
+        @param size size of block to read
+
+    """
+    remaining = size
+    file.seek(offset)
+    while remaining > 0:
+        data = file.read(min(remaining, CHUNK_SIZE))
+        if not data:
+            raise IOError("unexpected end of stream, {} bytes remaining".format(remaining))
+        remaining = remaining - len(data)
+        yield data
+

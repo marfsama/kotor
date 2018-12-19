@@ -43,47 +43,5 @@ def read_bif_directory(fileName):
         return entriesMap
 
 def read_bif_file(bif_file, bif_file_entry):
-    """
-        returns an iterator over 4k blocks of byte data
-        @param biffile an IOBase Stream, i.e. File
-        @param biffileEntry the entry which should be read
-    """
-    remaining = bif_file_entry.size
-    bif_file.seek(bif_file_entry.offset)
-    while remaining > 0:
-        data = bif_file.read(min(remaining, CHUCK_SIZE))
-        if not data:
-            raise IOError("unexpected end of stream, {} bytes remaining".format(remaining))
-        remaining = remaining - len(data)
-        yield data
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    return read_partial_stream(bif_file, bif_file_entry.offset, bif_file_entry.size)
 

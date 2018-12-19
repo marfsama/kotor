@@ -67,6 +67,7 @@ ressourceTypeTable = {
     2066: RessourceType(2066, 'ptt', 'Plot Wizard Blueprint'),
 
 	3001: RessourceType(3001, 'vis', 'Area data, room visibilities.'),
+	3003: RessourceType(3003, 'pth', 'Pathfinder data. GFF.'),
 	3007: RessourceType(3007, 'tpc', 'Texture.'),
     3008: RessourceType(3008, 'mdx','Geometry, model mesh data.')
 
@@ -252,7 +253,7 @@ def parse_command_line():
     parser.add_argument('-x', action='store_const', dest='action', const='extract', help='Extract file <file> from bif file')
     parser.add_argument('-u', action='store_const', dest='action', const='update', help='Updates a file bif or key file (not yet implemented)')
     parser.add_argument('-d', action='store_const', dest='action', const='delete', help='Delete file <file> from bif file  (not yet implemented)')
-    parser.add_argument('--dir', action='store', dest='directory', help='Directory from where to read or where to write to. Defaults to current directory.')
+    parser.add_argument('--dir', action='store', dest='directory', help='Directory from where to read or where to write to. Defaults to current directory.  (not yet implemented)')
 
     parsed = parser.parse_args()
 
@@ -263,5 +264,6 @@ def parse_command_line():
 def main():
     parse_command_line()
 
-main()
+if __name__ == "__main__":
+    main()
 
