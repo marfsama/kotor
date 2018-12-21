@@ -4,13 +4,87 @@ import argparse
 import os
 
 from functools import partial
-from tools import *
+from collections import OrderedDict
 
+from tools import *
 
 # based on xoreos/src/graphics/aurora/model_kotor.cpp from https://github.com/xoreos/xoreos
 
 # size of file header. each offset in mdl must be adjusted by the header offset.
 HEADER_OFFSET = 12
+
+class NodeHeader:
+    def __init__(self, file):
+        self.parent_node = readu16(file)
+        self.node_id = readu16(file)
+        file.read(4+2) # unknown
+        self.parent_node_start = readu32(file)
+        self.position = readlist(readfloat, file, 3) # x,y,z
+        self.rotation = readlist(readfloat, file, 4) # w,x,y,z
+        self.childlist_offset = readu32(file)
+        self.child_count = readu32(file)
+        file.read(4) # copy of child_count
+        self.controller_offset = readu32(file)
+        self.controller_count = readu32(file)
+        file.read(4) # copy of controller_count
+        self.controller_data_start = readu32(file)
+        self.controller_data_count = readu32(file)
+        file.read(4) # copy of controller_data_count
+
+
+    def read_node(self, file):
+        file.seek(self.childlist_offset + HEADER_OFFSET)
+        self.child_offsets = readlist(readu32, file, self.child_count)
+
+    def __str__(self):
+        return """{type_name}: {{parent_node: 0x{parent_node:x}, node_id: {node_id}, parent_node_start: {parent_node_start}, position: {position}, rotation: {rotation}, childlist_offset: 0x{childlist_offset:x}, child_count: {child_count}, controller_offset: {controller_offset}, controller_count: {controller_count}, controller_data_start: {controller_data_start}, controller_data_count: {controller_data_count}, child_offsets: {child_offsets}}}""".format(type_name=type(self).__name__, **vars(self))
+
+class MeshHeader:
+    def __init__(self, file):
+        file.read(4+4) # unknown
+        self.faces_offset = readu32(file);
+        self.faces_count = readu32(file);
+        file.read(4) # copy of faces_count
+        self.bounding_box = (readlist(readfloat, file, 3), readlist(readfloat, file, 3))
+        self.radius = readfloat(file)
+        self.averange = readlist(readfloat, file, 3)
+        self.diffuse = readlist(readfloat, file, 3)
+        self.ambient = readlist(readfloat, file, 3)
+        self.transparency_hint = readu32(file)
+        self.texture_name = file.read(32).partition(b'\0')[0].decode("utf-8")
+
+    def read_node(self, file):
+        pass
+
+    def __str__(self):
+        return """{type_name}: {{faces_offset: 0x{faces_offset:x}, faces_count: {faces_count}, bounding_box: {bounding_box}, radius: {radius}, averange: {averange}, diffuse: {diffuse}, ambient: {ambient}, transparency_hint: {transparency_hint}, texture_name: {texture_name}}}""".format(type_name=type(self).__name__, **vars(self))
+
+class NodeType:
+    def __init__(self, name, bitfield, header_type = None):
+        self.name = name
+        self.bitfield = bitfield
+        self.header_type = header_type
+
+    def matches(self, value):
+        return value & self.bitfield
+    
+    def __str__(self):
+        return """{type_name}: {{name: {name}, bitfield: {bitfield}}}""".format(type_name=type(self).__name__, **vars(self))
+
+NODE_TYPES = [
+  NodeType("HEADER",    0x00000001, NodeHeader),
+  NodeType("LIGHT",     0x00000002 ),
+  NodeType("EMITTER",   0x00000004 ),
+  NodeType("CAMERA",    0x00000008 ),
+  NodeType("REFERENCE", 0x00000010 ),
+  NodeType("MESH",      0x00000020, MeshHeader),
+  NodeType("SKIN",      0x00000040 ),
+  NodeType("ANIM",      0x00000080 ),
+  NodeType("DANGLY",    0x00000100 ),
+  NodeType("AABB",      0x00000200 ),
+  NodeType("SABER",     0x00000800 )
+]
+
 
 class Header:
     def __init__(self, file):
@@ -65,29 +139,12 @@ class NamesHeader:
     def __str__(self):
         return """{type_name}: {{root_node: 0x{root_node:x}, names_offset: 0x{names_offset:x}, names_count: {names_count}}}""".format(type_name=type(self).__name__, **vars(self))
 
-class NodeHeader:
+class Node:
     def __init__(self, file):
-        self.parent_node = readu16(file)
-        self.node_id = readu16(file)
-        file.read(4+2) # unknown
-        self.parent_node_start = readu32(file)
-        self.position = readlist(readfloat, file, 3) # x,y,z
-        self.rotation = readlist(readfloat, file, 4) # w,x,y,z
-        self.childlist_offset = readu32(file)
-        self.child_count = readu32(file)
-        file.read(4) # copy of child_count
-        self.controller_offset = readu32(file)
-        self.controller_count = readu32(file)
-        file.read(4) # copy of controller_count
-        self.controller_data_start = readu32(file)
-        self.controller_data_count = readu32(file)
-        file.read(4) # copy of controller_data_count
-
-
-    def read_node(self, file):
-        file.seek(self.childlist_offset + HEADER_OFFSET)
-        self.child_offsets = readlist(readu32, file, self.child_count)
+        self.node_type_id = readu16(file)
+        self.node_types = [node_type for node_type in NODE_TYPES if node_type.matches(self.node_type_id)]
         # set later
+        self.headers = OrderedDict() # keep insertion order
         self.name = ""
         self.childs = []
 
@@ -95,21 +152,31 @@ class NodeHeader:
         return self.childs
 
     def __str__(self):
-        return """{type_name}: {{node_type: 0x{node_type:x}, parent_node: 0x{parent_node:x}, node_id: {node_id}, parent_node_start: {parent_node_start}, position: {position}, rotation: {rotation}, childlist_offset: 0x{childlist_offset:x}, child_count: {child_count}, controller_offset: {controller_offset}, controller_count: {controller_count}, controller_data_start: {controller_data_start}, controller_data_count: {controller_data_count}, child_offsets: {child_offsets}}}""".format(type_name=type(self).__name__, **vars(self))
+        return """{type_name}: {{node_type_id: 0x{node_type_id:x}}}""".format(type_name=type(self).__name__, **vars(self))
 
 
 def read_node_tree(file, node_offset):
     file.seek(node_offset + HEADER_OFFSET)
-    node_type = readu16(file)
-    node = NodeHeader(file)
-    node.read_node(file)
+    node = Node(file)
+    # read header
+    for node_type in node.node_types:
+        if node_type.header_type:
+            node_type_header = node_type.header_type(file)
+            node.headers[node_type.name] = node_type_header
+
+    # read content of node type
+    for name, node_type_header in node.headers.items():
+         node_type_header.read_node(file)
+
     # read child nodes
-    for child_offset in node.child_offsets:
+    for child_offset in node.headers["HEADER"].child_offsets:
         node.childs.append(read_node_tree(file, child_offset))
     return node
 
+
 def update_node_name(names, node, depth):
-    node.name = names[node.node_id]
+    node.name = names[node.headers["HEADER"].node_id]
+
 
 def readModelFile(fileName):
     with open(fileName, "rb") as file:
@@ -132,9 +199,9 @@ def readModelFile(fileName):
         print(names)
         root_node = read_node_tree(file, names_header.root_node)
         # update names
-        visit_tree(root_node, NodeHeader.get_childs, partial(update_node_name, names))
+        visit_tree(root_node, Node.get_childs, partial(update_node_name, names))
         # print tree
-        visit_tree(root_node, NodeHeader.get_childs, lambda node, depth : print("  "*depth, node.node_id, node.name))
+        visit_tree(root_node, Node.get_childs, lambda node, depth : print("  "*depth, node.headers["HEADER"].node_id, node.name, hex(node.node_type_id), *[node_type.name for node_type in node.node_types], *[header for name, header in node.headers.items()]))
         print(hex(file.tell()))
 
 def parse_command_line():
