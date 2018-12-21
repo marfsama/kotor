@@ -103,7 +103,7 @@ def execute_action(parsed, erfFile):
 def parse_command_line():
     parser = argparse.ArgumentParser(description='Process ERF files.')
     parser.add_argument('input', help='path to erf file')
-    parser.add_argument('file', help='file to extract/delete/update')
+    parser.add_argument('file', nargs="?", help='file to extract/delete/update')
     parser.add_argument('-l', action='store_const', dest='action', const='list', help='List contents of bif or key file')
     parser.add_argument('-x', action='store_const', dest='action', const='extract', help='Extract file <file> from erf file')
     parser.add_argument('-u', action='store_const', dest='action', const='update', help='Updates a file entry in erf file (not yet implemented)')

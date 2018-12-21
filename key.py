@@ -66,6 +66,7 @@ ressourceTypeTable = {
     2065: RessourceType(2065, 'ptm', 'Plot Manager file/Plot Instance'),
     2066: RessourceType(2066, 'ptt', 'Plot Wizard Blueprint'),
 
+	3000: RessourceType(3000, 'lyt', 'Area data, room layout.'),
 	3001: RessourceType(3001, 'vis', 'Area data, room visibilities.'),
 	3003: RessourceType(3003, 'pth', 'Pathfinder data. GFF.'),
 	3007: RessourceType(3007, 'tpc', 'Texture.'),

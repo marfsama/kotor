@@ -37,13 +37,6 @@ def execute_action(parsed, keyFile):
     func = switcher.get(parsed.action, lambda: print("You need to specify one of -l, -u, -x, -d"))
     func(parsed, keyFile)
 
-def read_byte_by_byte(file):
-    """
-        returns the file as a byte by byte iterator
-    """
-    while True:
-        yield file.read(1)
-
 def read_tokens(file):
     """
         returns tokens separated by \x00 or tab

@@ -71,3 +71,31 @@ def read_partial_stream(file, offset, size):
         remaining = remaining - len(data)
         yield data
 
+def read_byte_by_byte(file):
+    """
+        returns the file as a byte by byte iterator
+    """
+    while True:
+        yield file.read(1)
+
+def read_terminated_token(file, terminator_function):
+    """
+        returns tokens until a separator is found. the separator is not returned.
+    """
+    result = b""
+    for byte in read_byte_by_byte(file):
+        if terminator_function(byte):
+            yield result
+            result = b""
+        else:
+            result = result + byte
+
+def null_terminated(byte):
+    return byte == b"\x00"
+
+def visit_tree(node, get_childs_function, visitor, depth=0):
+    visitor(node, depth)
+    for child in get_childs_function(node):
+         visit_tree(child, get_childs_function, visitor, depth + 1)
+
+
