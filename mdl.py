@@ -15,6 +15,7 @@ HEADER_OFFSET = 12
 
 class NodeHeader:
     def __init__(self, file):
+        self.tell = file.tell()-HEADER_OFFSET
         self.parent_node = readu16(file)
         self.node_id = readu16(file)
         file.read(4+2) # unknown
@@ -37,27 +38,114 @@ class NodeHeader:
         self.child_offsets = readlist(readu32, file, self.child_count)
 
     def __str__(self):
-        return """{type_name}: {{parent_node: 0x{parent_node:x}, node_id: {node_id}, parent_node_start: {parent_node_start}, position: {position}, rotation: {rotation}, childlist_offset: 0x{childlist_offset:x}, child_count: {child_count}, controller_offset: {controller_offset}, controller_count: {controller_count}, controller_data_start: {controller_data_start}, controller_data_count: {controller_data_count}, child_offsets: {child_offsets}}}""".format(type_name=type(self).__name__, **vars(self))
+        return """{type_name}: {{tell: {tell:x}, parent_node: 0x{parent_node:x}, node_id: {node_id}, parent_node_start: {parent_node_start}, position: {position}, rotation: {rotation}, childlist_offset: 0x{childlist_offset:x}, child_count: {child_count}, controller_offset: 0x{controller_offset:x}, controller_count: {controller_count}, controller_data_start: 0x{controller_data_start:x}, controller_data_count: {controller_data_count}, child_offsets: {child_offsets}}}""".format(type_name=type(self).__name__, **vars(self))
 
 class MeshHeader:
     def __init__(self, file):
+        self.tell = file.tell()-HEADER_OFFSET
         file.read(4+4) # unknown
         self.faces_offset = readu32(file);
         self.faces_count = readu32(file);
         file.read(4) # copy of faces_count
         self.bounding_box = (readlist(readfloat, file, 3), readlist(readfloat, file, 3))
-        self.radius = readfloat(file)
-        self.averange = readlist(readfloat, file, 3)
+        self.radius = readfloat(file)  # radius of bounding sphere
+        self.averange = readlist(readfloat, file, 3) # midpoint of bounding sphere
         self.diffuse = readlist(readfloat, file, 3)
         self.ambient = readlist(readfloat, file, 3)
         self.transparency_hint = readu32(file)
         self.texture_name = file.read(32).partition(b'\0')[0].decode("utf-8")
+        self.texture_name2 = file.read(32).partition(b'\0')[0].decode("utf-8")
+        file.read(24) # unknown
+        # read array where the vertex counts are saved. array always has size 1.
+        self.vertex_count_offset = readu32(file);
+        self.vertex_count_count = readu32(file);
+        file.read(4) # copy of vertex_count_count
+        # read array where the vertex offsets are saved. array always has size 1.
+        self.vertex_offset_offset = readu32(file);
+        self.vertex_offset_count = readu32(file);
+        file.read(4) # copy of vertex_offset_count
+        file.read(12) # another unknown array (offset, count, copy of count)
+        file.read(24 + 16) # other unknown stuff
+        self.mdx_structure_size = readu32(file)
+        file.read(8) # unknown
+        self.vertex_normals_offset = readu32(file);
+        file.read(4) # unknown
+        self.uv_offset1 = readu32(file)
+        self.uv_offset2 = readu32(file)
+        file.read(24) # unknown
+        self.vertex_count  = readu16(file)
+        self.texture_count = readu16(file)
+        file.read(2) # unknown
+        self.shadow = readu16(file) != 0
+        self.render = readu16(file) != 0
+        file.read(10) # unknown
+#	if (ctx.kotor2)
+        file.read(8) # unknown
+
+        self.mdx_offset = readu32(file)
+        self.vertex_coordinates_offset = readu32(file)
+
+        # read later
+        self.vertex_count_array = []
+        self.vertex_offset_array = []
+
+    def read_node(self, file):
+        # read vertex count array and vertex offset array
+        file.seek(self.vertex_count_offset+HEADER_OFFSET)
+        self.vertex_count_array = readlist(readu32, file, self.vertex_count_count)
+        file.seek(self.vertex_offset_offset+HEADER_OFFSET)
+        self.vertex_offset_array = readlist(readu32, file, self.vertex_offset_count)
+        # read faces
+        file.seek(self.faces_offset+HEADER_OFFSET)
+        self.faces = readlist(Face, file, self.faces_count)
+        pass
+
+    def __str__(self):
+        return """{type_name}: {{tell: 0x{tell:x}, faces_offset: 0x{faces_offset:x}, faces_count: {faces_count}, bounding_box: {bounding_box}, radius: {radius}, averange: {averange}, diffuse: {diffuse}, ambient: {ambient}, transparency_hint: {transparency_hint}, texture_name: {texture_name}, texture_name2: {texture_name2}, vertex_count_offset: 0x{vertex_count_offset:x}, vertex_count_count: {vertex_count_count}, vertex_offset_offset: 0x{vertex_offset_offset:x}, vertex_offset_count: {vertex_offset_count}, mdx_structure_size: {mdx_structure_size}, vertex_normals_offset: 0x{vertex_normals_offset:x}, uv_offset1: 0x{uv_offset1:x}, uv_offset2: 0x{uv_offset2:x}, vertex_count: {vertex_count}, texture_count: {texture_count}, shadow: {shadow}, render: {render}, mdx_offset: 0x{mdx_offset:x}, vertex_coordinates_offset: 0x{vertex_coordinates_offset:x}, vertex_count_array: {vertex_count_array}, vertex_offset_array: {vertex_offset_array}, faces: {facesstr}}}""".format(type_name=type(self).__name__, **vars(self), facesstr=", ".join([str(face) for face in self.faces]))
+
+class Face:
+    def __init__(self, file):
+        # values between -1 und +1. Some kind of normalized vector?
+        self.floats = readlist(readfloat, file, 4)
+        # index into vertex array
+        self.ints = readlist(readu16, file, 8)
+
+    def __str__(self):
+        return """{type_name}: {{floats: {floats}, ints: {intsstr}}}""".format(type_name=type(self).__name__, **vars(self), intsstr=", ".join([hex(i) for i in self.ints]))
+    
+
+class SkinMeshHeader:
+    def __init__(self, file):
+        file.read(20) # unknown
+        self.bones_offset = readu32(file)
+        self.bones_count = readu32(file)
+        file.read(12+12+12) # 3 unknown arrays (each: offset, count, copy of count)
+        self.bone_nodes = readlist(readu16, file, 15) # list of nodes which can affect vertices from this node
+        file.read(6) # unknown
+
 
     def read_node(self, file):
         pass
 
     def __str__(self):
-        return """{type_name}: {{faces_offset: 0x{faces_offset:x}, faces_count: {faces_count}, bounding_box: {bounding_box}, radius: {radius}, averange: {averange}, diffuse: {diffuse}, ambient: {ambient}, transparency_hint: {transparency_hint}, texture_name: {texture_name}}}""".format(type_name=type(self).__name__, **vars(self))
+        return """{type_name}: {{bones_offset: 0x{bones_offset:x}, bones_count: {bones_count}, bone_nodes: {bone_nodes}}}""".format(type_name=type(self).__name__, **vars(self))
+
+class DanglyMeshHeader:
+    def __init__(self, file):
+        self.constraints_offset = readu32(file)
+        self.constraints_size = readu32(file)
+        file.read(4) # copy of constraints_size
+        self.displacement = readfloat(file)
+        self.tightness = readfloat(file)
+        self.period = readfloat(file)
+        file.read(4) # unknown
+
+    def read_node(self, file):
+        pass
+
+    def __str__(self):
+        return """{type_name}: {{constraints_offset: 0x{constraints_offset:x}, constraints_size: {constraints_size}, displacement: {displacement}, tightness: {tightness}, period: {period}}}""".format(type_name=type(self).__name__, **vars(self))
+
 
 class NodeType:
     def __init__(self, name, bitfield, header_type = None):
@@ -78,9 +166,9 @@ NODE_TYPES = [
   NodeType("CAMERA",    0x00000008 ),
   NodeType("REFERENCE", 0x00000010 ),
   NodeType("MESH",      0x00000020, MeshHeader),
-  NodeType("SKIN",      0x00000040 ),
+  NodeType("SKIN",      0x00000040, SkinMeshHeader),
   NodeType("ANIM",      0x00000080 ),
-  NodeType("DANGLY",    0x00000100 ),
+  NodeType("DANGLY",    0x00000100, DanglyMeshHeader),
   NodeType("AABB",      0x00000200 ),
   NodeType("SABER",     0x00000800 )
 ]
@@ -94,6 +182,7 @@ class Header:
 
     def __str__(self):
         return """{name}: {{mdl_size: {mdl_size}, mdx_size: {mdx_size}}}""".format(name=type(self).__name__, **vars(self))
+
 
 class GeometryHeader:
     def __init__(self, file):
@@ -115,8 +204,8 @@ class ModelHeader:
         file.read(4)
         self.animation_start = readu32(file)
         self.animation_count = readu32(file)
-        readu32(file) # copy of animation_count
-        file.read(4)
+        file.read(4) # copy of animation_count
+        file.read(4) # unknown
         self.bounding_box = readlist(readfloat, file, 6)
         self.radius = readfloat(file)
         self.scale = readfloat(file)
