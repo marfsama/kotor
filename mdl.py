@@ -13,6 +13,13 @@ from tools import *
 # size of file header. each offset in mdl must be adjusted by the header offset.
 HEADER_OFFSET = 12
 
+class Block:
+    """
+        Block of data read from the file. It is specified by it's start and length.
+    """
+    def __init__(self):
+        pass
+
 class NodeHeader:
     def __init__(self, file):
         self.parent_node = readu16(file)
@@ -228,9 +235,51 @@ class ModelHeader:
         self.radius = readfloat(file)
         self.scale = readfloat(file)
         self.super_model = file.read(32).partition(b'\0')[0].decode("utf-8")
+        # read later
+        self.animation_offsets = []
+        self.animations = []
+
+    def read_animations(self, file):
+        file.seek(self.animation_start+HEADER_OFFSET)
+        self.animation_offsets = readlist(readu32, file, self.animation_count)
+        for offset in self.animation_offsets:
+            file.seek(offset+HEADER_OFFSET)
+            animation_header = AnimationHeader(file)
+#            animation_header.read_events(file)
+            print(animation_header)
+            self.animations.append(animation_header)
+
 
     def __str__(self):
-        return """{type_name}: {{classification: {classification}, fogged: {fogged}, animation_start: 0x{animation_start:x}, animation_count: {animation_count}, bounding_box: {bounding_box}, radius: {radius}, scale: {scale}, super_model: {super_model}}}""".format(type_name=type(self).__name__, **vars(self))
+        return """{type_name}: {{classification: {classification}, fogged: {fogged}, animation_start: 0x{animation_start:x}, animation_count: {animation_count}, bounding_box: {bounding_box}, radius: {radius}, scale: {scale}, super_model: {super_model}, animation_offsets: [{animation_offsets_str}]}}""".format(type_name=type(self).__name__, **vars(self), animation_offsets_str=", ".join([hex(offset) for offset in self.animation_offsets]))
+
+class AnimationHeader:
+    def __init__(self, file):
+        self.geometry_header = GeometryHeader(file)
+        self.length = readfloat(file)
+        self.transition_time = readfloat(file)
+        self.name = file.read(32).partition(b'\0')[0].decode("utf-8")
+        self.events_offset = readu32(file)
+        self.events_count = readu32(file)
+        file.read(4) # copy of events_count
+        file.read(4) # unknown
+        self.events = []
+
+    def read_events(self, file):
+        file.seek(self.events_offset + HEADER_OFFSET)
+        self.events = readlist(Event, file, self.events_count)
+
+    def __str__(self):
+        return """{type_name}: {{geometry_header: {geometry_header}, length: {length}, transition_time: {transition_time}, name: {name}, events_offset: 0x{events_offset:x}, events_count: {events_count}, events: {events}}}""".format(type_name=type(self).__name__, **vars(self))
+
+class Event:
+    def __init__(self, file):
+        self.time = readfloat(file)
+        print(hex(file.tell()))
+        self.name = file.read(32).partition(b'\0')[0].decode("utf-8")
+
+    def __str__(self):
+        return """{{{name}@{time}}}""".format(type_name=type(self).__name__, **vars(self))
 
 
 class NamesHeader:
@@ -288,22 +337,23 @@ def update_node_name(names, node, depth):
 def readModelFile(filename):
     with open(filename, "rb") as file:
         header = Header(file)
-        print(header)
         geometry_header = GeometryHeader(file)
-        print(geometry_header)
         model_header = ModelHeader(file)
-        print(model_header)
         names_header = NamesHeader(file)
+        # read animations
+        model_header.read_animations(file)
+        print(header)
+        print(geometry_header)
+        print(model_header)
         print(names_header)
+
         # seek to start of names offset table
         file.seek(names_header.names_offset + HEADER_OFFSET)
         names_offsets = readlist(readu32, file, names_header.names_count)
-        print(toHex(names_offsets))
         names = []
         for name_offset in names_offsets:
             file.seek(name_offset + HEADER_OFFSET)
             names.append(next(read_terminated_token(file, null_terminated)).decode("utf-8"))
-        print(names)
         root_node = read_node_tree(file, names_header.root_node)
         # update names
         visit_tree(root_node, Node.get_childs, partial(update_node_name, names))
