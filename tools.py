@@ -99,3 +99,12 @@ def visit_tree(node, get_childs_function, visitor, depth=0):
          visit_tree(child, get_childs_function, visitor, depth + 1)
 
 
+def iterate_tree(node, get_childs_function):
+    yield node
+    for child in get_childs_function(node):
+        yield from iterate_tree(child, get_childs_function)
+
+
+
+
+

@@ -15,7 +15,6 @@ HEADER_OFFSET = 12
 
 class NodeHeader:
     def __init__(self, file):
-        self.tell = file.tell()-HEADER_OFFSET
         self.parent_node = readu16(file)
         self.node_id = readu16(file)
         file.read(4+2) # unknown
@@ -36,13 +35,13 @@ class NodeHeader:
     def read_node(self, file):
         file.seek(self.childlist_offset + HEADER_OFFSET)
         self.child_offsets = readlist(readu32, file, self.child_count)
+        # TODO: Read Controller Data
 
     def __str__(self):
-        return """{type_name}: {{tell: {tell:x}, parent_node: 0x{parent_node:x}, node_id: {node_id}, parent_node_start: {parent_node_start}, position: {position}, rotation: {rotation}, childlist_offset: 0x{childlist_offset:x}, child_count: {child_count}, controller_offset: 0x{controller_offset:x}, controller_count: {controller_count}, controller_data_start: 0x{controller_data_start:x}, controller_data_count: {controller_data_count}, child_offsets: {child_offsets}}}""".format(type_name=type(self).__name__, **vars(self))
+        return """{type_name}: {{parent_node: 0x{parent_node:x}, node_id: {node_id}, parent_node_start: {parent_node_start}, position: {position}, rotation: {rotation}, childlist_offset: 0x{childlist_offset:x}, child_count: {child_count}, controller_offset: 0x{controller_offset:x}, controller_count: {controller_count}, controller_data_start: 0x{controller_data_start:x}, controller_data_count: {controller_data_count}, child_offsets: {child_offsets}}}""".format(type_name=type(self).__name__, **vars(self))
 
 class MeshHeader:
     def __init__(self, file):
-        self.tell = file.tell()-HEADER_OFFSET
         file.read(4+4) # unknown
         self.faces_offset = readu32(file);
         self.faces_count = readu32(file);
@@ -63,6 +62,8 @@ class MeshHeader:
         # read array where the vertex offsets are saved. array always has size 1.
         self.vertex_offset_offset = readu32(file);
         self.vertex_offset_count = readu32(file);
+        if self.vertex_count_count != 1 or self.vertex_offset_count != 1:
+            raise ValueError("Illegal vertex array count. Only 1 is supported at the moment.")
         file.read(4) # copy of vertex_offset_count
         file.read(12) # another unknown array (offset, count, copy of count)
         file.read(24 + 16) # other unknown stuff
@@ -88,6 +89,8 @@ class MeshHeader:
         # read later
         self.vertex_count_array = []
         self.vertex_offset_array = []
+        self.faces = []
+        self.vertices = []
 
     def read_node(self, file):
         # read vertex count array and vertex offset array
@@ -98,21 +101,36 @@ class MeshHeader:
         # read faces
         file.seek(self.faces_offset+HEADER_OFFSET)
         self.faces = readlist(Face, file, self.faces_count)
+        # read vertex coordinates
+        file.seek(self.vertex_coordinates_offset+HEADER_OFFSET)
+        self.vertices = readlist(Vector, file, self.vertex_count)
+        # read vertex indices
+        file.seek(self.vertex_offset_array[0]+HEADER_OFFSET)
+        self.vertex_indices = readlist(readu16, file, self.vertex_count_array[0])
         pass
 
     def __str__(self):
-        return """{type_name}: {{tell: 0x{tell:x}, faces_offset: 0x{faces_offset:x}, faces_count: {faces_count}, bounding_box: {bounding_box}, radius: {radius}, averange: {averange}, diffuse: {diffuse}, ambient: {ambient}, transparency_hint: {transparency_hint}, texture_name: {texture_name}, texture_name2: {texture_name2}, vertex_count_offset: 0x{vertex_count_offset:x}, vertex_count_count: {vertex_count_count}, vertex_offset_offset: 0x{vertex_offset_offset:x}, vertex_offset_count: {vertex_offset_count}, mdx_structure_size: {mdx_structure_size}, vertex_normals_offset: 0x{vertex_normals_offset:x}, uv_offset1: 0x{uv_offset1:x}, uv_offset2: 0x{uv_offset2:x}, vertex_count: {vertex_count}, texture_count: {texture_count}, shadow: {shadow}, render: {render}, mdx_offset: 0x{mdx_offset:x}, vertex_coordinates_offset: 0x{vertex_coordinates_offset:x}, vertex_count_array: {vertex_count_array}, vertex_offset_array: {vertex_offset_array}, faces: {facesstr}}}""".format(type_name=type(self).__name__, **vars(self), facesstr=", ".join([str(face) for face in self.faces]))
+        return """{type_name}: {{faces_offset: 0x{faces_offset:x}, faces_count: {faces_count}, bounding_box: {bounding_box}, radius: {radius}, averange: {averange}, diffuse: {diffuse}, ambient: {ambient}, transparency_hint: {transparency_hint}, texture_name: {texture_name}, texture_name2: {texture_name2}, vertex_count_offset: 0x{vertex_count_offset:x}, vertex_count_count: {vertex_count_count}, vertex_offset_offset: 0x{vertex_offset_offset:x}, vertex_offset_count: {vertex_offset_count}, mdx_structure_size: {mdx_structure_size}, vertex_normals_offset: 0x{vertex_normals_offset:x}, uv_offset1: 0x{uv_offset1:x}, uv_offset2: 0x{uv_offset2:x}, vertex_count: {vertex_count}, texture_count: {texture_count}, shadow: {shadow}, render: {render}, mdx_offset: 0x{mdx_offset:x}, vertex_coordinates_offset: 0x{vertex_coordinates_offset:x}, vertex_count_array: {vertex_count_array}, vertex_offset_array: {vertex_offset_array}, faces: [{facesstr}], vertices: [{verticesstr}], vertex_indices: [{vertex_indices}] }}""".format(type_name=type(self).__name__, **vars(self), facesstr=", ".join([str(face) for face in self.faces]), verticesstr=", ".join([str(vertex) for vertex in self.vertices]))
 
 class Face:
     def __init__(self, file):
-        # values between -1 und +1. Some kind of normalized vector?
-        self.floats = readlist(readfloat, file, 4)
-        # index into vertex array
-        self.ints = readlist(readu16, file, 8)
+        self.plane_normal = Vector(file)
+        self.plane_distance = readfloat(file)
+        self.surface = readu32(file)
+        self.adjected_faces = readlist(readu16, file, 3)
+        self.vertex_indices = readlist(readu16, file, 3)
 
     def __str__(self):
-        return """{type_name}: {{floats: {floats}, ints: {intsstr}}}""".format(type_name=type(self).__name__, **vars(self), intsstr=", ".join([hex(i) for i in self.ints]))
-    
+        return """{type_name}: {{plane_normal: {plane_normal}, plane_distance: {plane_distance}, surface: {surface}, adjected_faces: {adjected_faces}, vertex_indices: {vertex_indices}}}""".format(type_name=type(self).__name__, **vars(self))
+
+class Vector:
+    def __init__(self, file):
+        self.x = readfloat(file)
+        self.y = readfloat(file)
+        self.z = readfloat(file)
+    def __str__(self):
+        return """{{{x}, {y}, {z}}}""".format(**vars(self))
+
 
 class SkinMeshHeader:
     def __init__(self, file):
@@ -267,8 +285,8 @@ def update_node_name(names, node, depth):
     node.name = names[node.headers["HEADER"].node_id]
 
 
-def readModelFile(fileName):
-    with open(fileName, "rb") as file:
+def readModelFile(filename):
+    with open(filename, "rb") as file:
         header = Header(file)
         print(header)
         geometry_header = GeometryHeader(file)
@@ -290,8 +308,31 @@ def readModelFile(fileName):
         # update names
         visit_tree(root_node, Node.get_childs, partial(update_node_name, names))
         # print tree
-        visit_tree(root_node, Node.get_childs, lambda node, depth : print("  "*depth, node.headers["HEADER"].node_id, node.name, hex(node.node_type_id), *[node_type.name for node_type in node.node_types], *[header for name, header in node.headers.items()]))
+#        visit_tree(root_node, Node.get_childs, lambda node, depth : print("  "*depth, node.headers["HEADER"].node_id, node.name, hex(node.node_type_id), *[node_type.name for node_type in node.node_types], *[header for name, header in node.headers.items()]))
+        visit_tree(root_node, Node.get_childs, lambda node, depth : print("  "*depth, node.headers["HEADER"].node_id, node.name, hex(node.node_type_id), *[node_type.name for node_type in node.node_types], node.headers["HEADER"].position, node.headers["HEADER"].rotation))
+
+        # export SKIN nodes
+#        export_mesh([node for node in iterate_tree(root_node, Node.get_childs) if "MESH" in node.headers and "SKIN" not in node.headers], filename)
+        export_mesh([node for node in iterate_tree(root_node, Node.get_childs) if "SKIN" in node.headers], filename)
         print(hex(file.tell()))
+
+def export_mesh(nodes, filename):
+    basename = os.path.splitext(os.path.split(filename)[1])[0]
+    with open(basename+".obj", 'w') as f:
+        f.write("# OBJ file\n")
+        vertex_offset = 1
+        for node in nodes:
+            mesh = node.headers["MESH"]
+
+            f.write("o {name}\n".format(name=node.name))
+            for v in mesh.vertices:
+                f.write("v %.4f %.4f %.4f\n" % (v.x, v.y, v.z))
+            for face in mesh.faces:
+                f.write("f")
+                for i in face.vertex_indices:
+                    f.write(" %d" % (i + vertex_offset))
+                f.write("\n")
+            vertex_offset = vertex_offset + len(mesh.vertices)
 
 def parse_command_line():
     parser = argparse.ArgumentParser(description='Process MDL files.')
@@ -300,7 +341,6 @@ def parse_command_line():
     parsed = parser.parse_args()
 
     model = readModelFile(parsed.input)
-
 
 
 def main():

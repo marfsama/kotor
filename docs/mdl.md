@@ -18,7 +18,7 @@
 | 73ab7 | 73eef | 1080 | Vector     | MeshHeader.vertex_count  | MeshHeader.vertex_coordinates_offset: float x,y,z for each vertex |
 | 73eef | 73ee3 |    4 | dword      | 1                        | MeshHeader.vertex_offset_offset: list of offsets for vertex array |
 | 73ee3 | 73ef7 |    4 | dword      | 1                        | ??? 0x11A (282) |
-| 73ef7 | 73fab |  180 | ??         | MeshHeader.vertex_offset_count[0] | MeshHeader.vertex_offset_offset[0]: (30 faces, 3 vetices each, 2 bytes each. Index into vertex array)
+| 73ef7 | 73fab |  180 | word       | MeshHeader.vertex_offset_count[0] | MeshHeader.vertex_offset_offset[0]: just some consecutive ascending ids |
 | 73fab | 73faf |    4 | dword      | NodeHeader.child_count   | child offsets list |
 | 73faf | ...   | ...  | dword      | 1                        | first child node offset |
 | 74b33 |       |      |            |                          | controller offset (5 controller, each 0x10 bytes?) |
@@ -47,3 +47,25 @@ Note: the controller structure is not directly adjected to the node. Maybe these
 | x    | float |   1   | x coordinate |
 | y    | float |   1   | x coordinate |
 | z    | float |   1   | x coordinate |
+
+
+## Node Structure
+
+The usual node structure is:
+
+* "root node", same name as model file
+    * cutscenedummy
+        *  rootdummy
+            * ...model nodes
+    * hook 1 (no rotation)
+    * hook n (no rotation)
+    * skin node 1 (no translation and rotation)
+    * skin node n (no translation and rotation)
+
+
+### creatures (c_)
+* player (p_)
+* areas
+* 
+* 
+* 
