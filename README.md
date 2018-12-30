@@ -71,6 +71,34 @@ optional arguments:
   --csvsep [CSVSEP]  set csv separator (default: comma ',')
 ```
 
+## mdl.py
+
+Convert model files to ascii format.
+```
+usage: TODO
+```
+
+## blocks.py
+
+Convert block files to mulitcolor image.
+
+```
+usage: blocks.py [-h] [-c color_file] [-s scale] [-w width] input
+
+Process block (.blk) files.
+
+positional arguments:
+  input          path to blk file
+
+optional arguments:
+  -h, --help     show this help message and exit
+  -c color_file  specify color file
+  -s scale       scale factor of the image
+  -w width       width of the image (in respect to scale factor 1)
+```
+
+
+
 ## Alternatives
 
 Have a look at xoreos (https://github.com/xoreos/xoreos).

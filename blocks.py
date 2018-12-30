@@ -84,9 +84,9 @@ def read_colors_file(color_file):
 def parse_command_line():
     parser = argparse.ArgumentParser(description='Process block (.blk) files.')
     parser.add_argument('input', help='path to blk file')
-    parser.add_argument('-c', '--color', help='specify color file')
-    parser.add_argument('-s', '--scale', type=int, default=1, help='scale factor of the image')
-    parser.add_argument('-w', '--width', type=int, default=500, help='width of the image (in respect to scale factor 1)')
+    parser.add_argument('-c', metavar='color_file', help='specify color file')
+    parser.add_argument('-s', metavar='scale', type=int, default=1, help='scale factor of the image')
+    parser.add_argument('-w', metavar='width', type=int, default=500, help='width of the image (in respect to scale factor 1)')
 
     parsed = parser.parse_args()
 
