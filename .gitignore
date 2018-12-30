@@ -109,3 +109,7 @@ aurora/
 data/
 # exported Wavefront .obj file
 *.obj
+# Block Listing
+*.blk
+# generated block image
+*.png

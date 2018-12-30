@@ -72,19 +72,46 @@ class NodeHeader:
             self.controller_offset = readu32(file)
             self.controller_count = readu32(file)
             file.read(4) # copy of controller_count
-            self.controller_data_start = readu32(file)
+            self.controller_data_offset = readu32(file)
             self.controller_data_count = readu32(file)
             file.read(4) # copy of controller_data_count
 
+        # read later
+        self.child_offsets = []
+        self.controllers = []
+        self.controller_data = []
 
     def read_node(self, file):
         file.seek(self.childlist_offset + HEADER_OFFSET)
         with self.parent_block.block("NodeHeader.child_offsets", file):
             self.child_offsets = readlist(readu32, file, self.child_count)
-        # TODO: Read Controller Data
+
+        if self.controller_count > 0:
+            file.seek(self.controller_offset + HEADER_OFFSET)
+            with self.parent_block.block("Controller.array", file):
+                self.controllers = readlist(Controller, file, self.controller_count)
+
+            file.seek(self.controller_data_offset + HEADER_OFFSET)
+            with self.parent_block.block("Controller.data", file):
+                self.controller_data = readlist(readfloat, file, self.controller_data_count)
 
     def __str__(self):
-        return """{type_name}: {{parent_node: 0x{parent_node:x}, node_id: {node_id}, parent_node_start: {parent_node_start}, position: {position}, rotation: {rotation}, childlist_offset: 0x{childlist_offset:x}, child_count: {child_count}, controller_offset: 0x{controller_offset:x}, controller_count: {controller_count}, controller_data_start: 0x{controller_data_start:x}, controller_data_count: {controller_data_count}, child_offsets: {child_offsets}}}""".format(type_name=type(self).__name__, **vars(self))
+        return """{type_name}: {{parent_node: 0x{parent_node:x}, node_id: {node_id}, parent_node_start: {parent_node_start}, position: {position}, rotation: {rotation}, childlist_offset: 0x{childlist_offset:x}, child_count: {child_count}, controller_offset: 0x{controller_offset:x}, controller_count: {controller_count}, controller_data_offset: 0x{controller_data_offset:x}, controller_data_count: {controller_data_count}, child_offsets: {child_offsets}}}""".format(type_name=type(self).__name__, **vars(self))
+
+class Controller:
+    def __init__(self, file):
+        self.controller_type = readu32(file)
+        file.read(2) # unknown
+        self.rows = readu16(file)
+        self.timekey_offset = readu16(file)
+        self.datakey_offset = readu16(file)
+        self.columns = readu8(file)
+        file.read(3) # unknown
+            
+
+    def __str__(self):
+        return """{type_name}: {{controller_type: {controller_type}, rows: {rows}, columns: {columns}, timekey_offset: {timekey_offset}, datakey_offset: {datakey_offset}}}""".format(type_name=type(self).__name__, **vars(self))
+    
 
 class MeshHeader:
     def __init__(self, file, parent_block):
@@ -149,6 +176,7 @@ class MeshHeader:
         file.seek(self.vertex_offset_offset+HEADER_OFFSET)
         with self.parent_block.block("MeshHeader.vertex_offset_array", file):
             self.vertex_offset_array = readlist(readu32, file, self.vertex_offset_count)
+            # note: directly after this array there is an unknown 32bit value.
 
         # read faces
         file.seek(self.faces_offset+HEADER_OFFSET)
@@ -191,20 +219,46 @@ class Vector:
 
 class SkinMeshHeader:
     def __init__(self, file, parent_block):
+        self.parent_block = parent_block
         with parent_block.block("SkinMeshHeader", file):
             file.read(20) # unknown
-            self.bones_offset = readu32(file)
-            self.bones_count = readu32(file)
-            file.read(12+12+12) # 3 unknown arrays (each: offset, count, copy of count)
+            self.bone_map_offset = readu32(file)
+            self.bone_map_count = readu32(file)
+            self.unknown_array1_offset = readu32(file)
+            self.unknown_array1_count = readu32(file)
+            file.read(4) # copy of unknown_array1_count
+            self.unknown_array2_offset = readu32(file)
+            self.unknown_array2_count = readu32(file)
+            file.read(4) # copy of unknown_array2_count
+            self.unknown_array3_offset = readu32(file)
+            self.unknown_array3_count = readu32(file)
+            file.read(4) # copy of unknown_array3_count
             self.bone_nodes = readlist(readu16, file, 15) # list of nodes which can affect vertices from this node
             file.read(6) # unknown
-
+        # read later
+        self.bone_map = []
 
     def read_node(self, file):
-        pass
+        # read bone map
+        file.seek(self.bone_map_offset+HEADER_OFFSET)
+        print(hex(self.bone_map_offset), self.bone_map_count, hex(self.unknown_array1_offset), self.unknown_array1_count, hex(self.unknown_array2_offset), self.unknown_array2_count, hex(self.unknown_array3_offset), self.unknown_array3_count)
+        with self.parent_block.block("SkinMeshHeader.bone_map", file):
+            self.bone_map = readlist(readu32, file, self.bone_map_count)
+
+        file.seek(self.unknown_array1_offset+HEADER_OFFSET)
+        with self.parent_block.block("SkinMeshHeader.unknown_array1", file):
+            self.unknown_array1 = readlist(readfloat, file, self.unknown_array1_count*4)
+    
+        file.seek(self.unknown_array2_offset+HEADER_OFFSET)
+        with self.parent_block.block("SkinMeshHeader.unknown_array2", file):
+            self.unknown_array2 = readlist(readfloat, file, self.unknown_array2_count*3)
+
+        file.seek(self.unknown_array3_offset+HEADER_OFFSET)
+        with self.parent_block.block("SkinMeshHeader.unknown_array3", file):
+            self.unknown_array3 = readlist(readfloat, file, self.unknown_array3_count)
 
     def __str__(self):
-        return """{type_name}: {{bones_offset: 0x{bones_offset:x}, bones_count: {bones_count}, bone_nodes: {bone_nodes}}}""".format(type_name=type(self).__name__, **vars(self))
+        return """{type_name}: {{bone_map_offset: 0x{bone_map_offset:x}, bone_map_count: {bone_map_count}, bone_nodes: {bone_nodes}}}""".format(type_name=type(self).__name__, **vars(self))
 
 class DanglyMeshHeader:
     def __init__(self, file, parent_block):
@@ -431,7 +485,7 @@ def readModelFile(filename, block):
         visit_tree(root_node, Node.get_childs, partial(update_node_name, names_header.names))
         # print tree
 #        visit_tree(root_node, Node.get_childs, lambda node, depth : print("  "*depth, node.headers["HEADER"].node_id, node.name, hex(node.node_type_id), *[node_type.name for node_type in node.node_types], *[header for name, header in node.headers.items()]))
-        visit_tree(root_node, Node.get_childs, lambda node, depth : print("  "*depth, node.headers["HEADER"].node_id, node.name, hex(node.node_type_id), *[node_type.name for node_type in node.node_types], node.headers["HEADER"].position, node.headers["HEADER"].rotation))
+        visit_tree(root_node, Node.get_childs, lambda node, depth : print("  "*depth, node.headers["HEADER"].node_id, node.name, hex(node.node_type_id), *[node_type.name for node_type in node.node_types], node.headers["HEADER"].position, node.headers["HEADER"].rotation, *node.headers["HEADER"].controllers))
 
         # export SKIN nodes
 #        export_mesh([node for node in iterate_tree(root_node, Node.get_childs) if "MESH" in node.headers and "SKIN" not in node.headers], filename)
@@ -455,10 +509,14 @@ def export_mesh(nodes, filename):
                     f.write(" %d" % (i + vertex_offset))
                 f.write("\n")
             vertex_offset = vertex_offset + len(mesh.vertices)
+    print("mesh written to "+basename+".obj")
 
-def print_block(block):
+def print_block(block, filename):
     block.sort()
-    visit_tree(block, Block.get_childs, lambda block, depth : print("  "*depth, block.start, block.end, block.name))
+    basename = os.path.splitext(os.path.split(filename)[1])[0]
+    with open(basename+".blk", 'w') as f:
+        visit_tree(block, Block.get_childs, lambda block, depth : f.write("{}{} {} {}\n".format("  "*depth, block.start, block.end, block.name)))
+    print("block file written to "+basename+".blk")
 
 
 def parse_command_line():
@@ -470,7 +528,7 @@ def parse_command_line():
     block = Block("root", 0)
     model = readModelFile(parsed.input, block)
     block.close_block(os.stat(parsed.input).st_size)
-    print_block(block)
+    print_block(block, parsed.input)
 
 def main():
     parse_command_line()
