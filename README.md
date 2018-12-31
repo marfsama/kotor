@@ -83,20 +83,23 @@ usage: TODO
 Convert block files to mulitcolor image.
 
 ```
-usage: blocks.py [-h] [-c color_file] [-s scale] [-w width] input
+usage: blocks.py [-h] [-c color_file] [-s scale] [-w width] [-r range]
+                 input [output]
 
 Process block (.blk) files.
 
 positional arguments:
   input          path to blk file
+  output         output png filename (optional, defaults to basename of input
+                 file with "png" extension)
 
 optional arguments:
   -h, --help     show this help message and exit
   -c color_file  specify color file
   -s scale       scale factor of the image
   -w width       width of the image (in respect to scale factor 1)
+  -r range       (from-to) only process bytes from index from to to
 ```
-
 
 
 ## Alternatives

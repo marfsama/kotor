@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import sys
 
 
 from itertools import cycle
@@ -33,6 +34,9 @@ class Block:
         self.start = start
         self.end = end
         self.name = name
+
+    def __str__(self):
+        return "{} - {} - {}".format(self.start, self.end, self.name)
 
 
 def read_block_file(filename):
@@ -81,22 +85,58 @@ def read_colors_file(color_file):
 
     return colors
 
+def rangetype(string):
+    if string:
+        min_str, max_str = string.split('-')
+        min_value = 0 if not min_str else int(min_str)
+        max_value = sys.maxsize if not max_str else int(max_str)
+        return (min_value, max_value)
+    return None
+
+def filter_blocks(blocks, valid_range):
+    # filter blocks which are not in range
+    valid_blocks = [block for block in blocks if block.end > valid_range[0] and block.start < valid_range[1]]
+    if not valid_blocks:
+        return valid_blocks
+
+    # modify blocks to not start before start and end after end
+    for block in valid_blocks:
+        if block.start < valid_range[0]:
+            block.start = valid_range[0]
+    
+        if block.end > valid_range[1]:
+            block.end = valid_range[1]
+
+    # move all blocks to the start, so the first block starts with 0
+    for block in valid_blocks:
+        block.start = block.start - valid_range[0]
+        block.end = block.end - valid_range[0]
+
+    return valid_blocks
+
 def parse_command_line():
     parser = argparse.ArgumentParser(description='Process block (.blk) files.')
     parser.add_argument('input', help='path to blk file')
-    parser.add_argument('-c', metavar='color_file', help='specify color file')
-    parser.add_argument('-s', metavar='scale', type=int, default=1, help='scale factor of the image')
-    parser.add_argument('-w', metavar='width', type=int, default=500, help='width of the image (in respect to scale factor 1)')
+    parser.add_argument('output', nargs='?', help='output png filename (optional, defaults to basename of input file with "png" extension)')
+    parser.add_argument('-c', metavar='color_file', dest='color', help='specify color file')
+    parser.add_argument('-s', metavar='scale', dest='scale', type=int, default=1, help='scale factor of the image')
+    parser.add_argument('-w', metavar='width', dest='width', type=int, default=500, help='width of the image (in respect to scale factor 1)')
+    parser.add_argument('-r', metavar='range', dest='range', type=rangetype, help='(from-to) only process bytes from index from to to')
 
     parsed = parser.parse_args()
 
     blocks = read_block_file(parsed.input)
+    blocks = filter_blocks(blocks, parsed.range)
     colors = read_colors_file(parsed.color)
     colors = assign_colors(blocks, colors)
+
     image = generate_image(blocks, colors, scale=parsed.scale, width=parsed.width)
 
-    basename = os.path.splitext(os.path.split(parsed.input)[1])[0]
-    image.save(basename+'.png')
+    if parsed.output:
+        output_filename = parsed.output
+    else:
+        output_filename = os.path.splitext(os.path.split(parsed.input)[1])[0]+'.png'
+    image.save(output_filename)
 
 def main():
     parse_command_line()

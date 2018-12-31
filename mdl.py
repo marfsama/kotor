@@ -245,14 +245,17 @@ class SkinMeshHeader:
         with self.parent_block.block("SkinMeshHeader.bone_map", file):
             self.bone_map = readlist(readu32, file, self.bone_map_count)
 
+        # 4 floats each node. rotation quaternion?
         file.seek(self.unknown_array1_offset+HEADER_OFFSET)
         with self.parent_block.block("SkinMeshHeader.unknown_array1", file):
             self.unknown_array1 = readlist(readfloat, file, self.unknown_array1_count*4)
     
+        # 3 floats each node. translation?
         file.seek(self.unknown_array2_offset+HEADER_OFFSET)
         with self.parent_block.block("SkinMeshHeader.unknown_array2", file):
             self.unknown_array2 = readlist(readfloat, file, self.unknown_array2_count*3)
 
+        # 1 floats each node. scale/length of bone?
         file.seek(self.unknown_array3_offset+HEADER_OFFSET)
         with self.parent_block.block("SkinMeshHeader.unknown_array3", file):
             self.unknown_array3 = readlist(readfloat, file, self.unknown_array3_count)
@@ -262,6 +265,7 @@ class SkinMeshHeader:
 
 class DanglyMeshHeader:
     def __init__(self, file, parent_block):
+        self.parent_block = parent_block
         with parent_block.block("DanglyMeshHeader", file):
             self.constraints_offset = readu32(file)
             self.constraints_size = readu32(file)
@@ -270,12 +274,17 @@ class DanglyMeshHeader:
             self.tightness = readfloat(file)
             self.period = readfloat(file)
             file.read(4) # unknown
+        # read later
+        self.constraints = []
 
     def read_node(self, file):
-        pass
+        file.seek(self.constraints_offset+HEADER_OFFSET)
+        with self.parent_block.block("DanglyMeshHeader.constraints", file):
+            self.constraints = readlist(readfloat, file, self.constraints_size*4)
+        print(self)
 
     def __str__(self):
-        return """{type_name}: {{constraints_offset: 0x{constraints_offset:x}, constraints_size: {constraints_size}, displacement: {displacement}, tightness: {tightness}, period: {period}}}""".format(type_name=type(self).__name__, **vars(self))
+        return """{type_name}: {{constraints_offset: 0x{constraints_offset:x}, constraints_size: {constraints_size}, displacement: {displacement}, tightness: {tightness}, period: {period}, constraints: {constraints}}}""".format(type_name=type(self).__name__, **vars(self))
 
 
 class NodeType:
