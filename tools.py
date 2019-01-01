@@ -106,5 +106,47 @@ def iterate_tree(node, get_childs_function):
 
 
 
+class Block:
+    """
+        Block of data read from the file. It is specified by it's start and length.
+    """
+    def __init__(self, name, start, file=None):
+        self.start = start
+        self.end = start
+        self.name = name
+        self.file = file
+        self.blocks = []
+        pass
+
+    def start_block(self, name, start):
+        block = Block(name, start)
+        self.blocks.append(block)
+        return block
+
+    def block(self, name, file):
+        block = Block(name, 0, file)
+        self.blocks.append(block)
+        return block
+
+    def __enter__(self):
+        if self.file:
+            self.start = self.file.tell()
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.close_block(self.file.tell())
+
+    def close_block(self, end):
+        self.end = end
+
+    def get_childs(self):
+        return self.blocks
+
+    def sort(self):
+        self.blocks.sort(key=lambda block: block.start)
+
+
+    def __str__(self):
+        return "{}, {}".format(self.start, self.end)
 
 

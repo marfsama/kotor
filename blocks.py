@@ -94,6 +94,9 @@ def rangetype(string):
     return None
 
 def filter_blocks(blocks, valid_range):
+    # filter range not set: don't filter
+    if not valid_range:
+        return blocks
     # filter blocks which are not in range
     valid_blocks = [block for block in blocks if block.end > valid_range[0] and block.start < valid_range[1]]
     if not valid_blocks:
