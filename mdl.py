@@ -219,7 +219,6 @@ class DanglyMeshHeader:
         file.seek(self.constraints.offset+HEADER_OFFSET)
         with self.parent_block.block("DanglyMeshHeader.constraints", file):
             self.constraints.data = readlist(readfloat, file, self.constraints.allocated_entries*4)
-        print(self)
 
     def __str__(self):
         return """{type_name}: {{displacement: {displacement}, tightness: {tightness}, period: {period}, constraints: {constraints}}}""".format(type_name=type(self).__name__, **vars(self))
@@ -303,11 +302,12 @@ class ModelHeader:
             file.seek(offset+HEADER_OFFSET)
             animation_header = AnimationHeader(file, self.parent_block)
             animation_header.read_events(file)
+            animation_header.read_animation_node(file)
             self.animations.append(animation_header)
 
 
     def __str__(self):
-        return """{type_name}: {{classification: {classification}, fogged: {fogged}, animation_offset_array: {animation_offset_array}, bounding_box: {bounding_box}, radius: {radius}, scale: {scale}, super_model: {super_model}, animation_offsets: [{animation_offsets_str}]}}""".format(type_name=type(self).__name__, **vars(self), animation_offsets_str=", ".join([str(animation) for animation in self.animations]))
+        return """{type_name}: {{classification: {classification}, fogged: {fogged}, animation_offset_array: {animation_offset_array}, bounding_box: {bounding_box}, radius: {radius}, scale: {scale}, super_model: {super_model}, animations: \n[{animations_str}]}}""".format(type_name=type(self).__name__, **vars(self), animations_str="\n".join([str(animation) for animation in self.animations]))
 
 class AnimationHeader:
     def __init__(self, file, parent_block):
@@ -320,6 +320,7 @@ class AnimationHeader:
             self.events = Array(file)
             file.read(4) # unknown
         # TODO: read animation nodes from geometry header
+        self.animation_node = None
 
     def read_events(self, file):
         if self.events.allocated_entries > 0:
@@ -327,8 +328,13 @@ class AnimationHeader:
             with self.parent_block.block("Animations.events", file):
                 self.events.data = readlist(Event, file, self.events.allocated_entries)
 
+
+    def read_animation_node(self, file):
+        self.animation_node = read_node_tree(file, self.geometry_header.node_offset,  self.parent_block)
+        
+
     def __str__(self):
-        return """{type_name}: {{geometry_header: {geometry_header}, length: {length}, transition_time: {transition_time}, name: {name}, events: [{eventsstr}]}}""".format(type_name=type(self).__name__, **vars(self), eventsstr=", ".join([str(event) for event in self.events]))
+        return """{type_name}: {{geometry_header: {geometry_header}, length: {length}, transition_time: {transition_time}, name: {name}, events: [{eventsstr}], node: {animation_node}}}""".format(type_name=type(self).__name__, **vars(self), eventsstr=", ".join([str(event) for event in self.events.data]))
 
 class Event:
     def __init__(self, file):
@@ -379,7 +385,7 @@ class Node:
         return self.childs
 
     def __str__(self):
-        return """{type_name}: {{node_type_id: 0x{node_type_id:x}}}""".format(type_name=type(self).__name__, **vars(self))
+        return """{type_name}: {{node_type_id: 0x{node_type_id:x} ({node_types_str})}}""".format(type_name=type(self).__name__, **vars(self),  node_types_str=",".join([type.name for type in self.node_types])) 
 
 
 def read_node_tree(file, node_offset, parent_block):
@@ -396,8 +402,9 @@ def read_node_tree(file, node_offset, parent_block):
          node_type_header.read_node(file)
 
     # read child nodes
-    for child_offset in node.headers["HEADER"].child_offsets.data:
-        node.childs.append(read_node_tree(file, child_offset, parent_block))
+    if "HEADER" in node.headers:
+        for child_offset in node.headers["HEADER"].child_offsets.data:
+            node.childs.append(read_node_tree(file, child_offset, parent_block))
     return node
 
 
@@ -424,7 +431,7 @@ def readModelFile(filename, block):
         visit_tree(root_node, Node.get_childs, partial(update_node_name, names_header.names))
         # print tree
 #        visit_tree(root_node, Node.get_childs, lambda node, depth : print("  "*depth, node.headers["HEADER"].node_id, node.name, hex(node.node_type_id), *[node_type.name for node_type in node.node_types], *[header for name, header in node.headers.items()]))
-        visit_tree(root_node, Node.get_childs, lambda node, depth : print("  "*depth, node.headers["HEADER"].node_id, node.name, hex(node.node_type_id), *[node_type.name for node_type in node.node_types], node.headers["HEADER"].position, node.headers["HEADER"].rotation, *node.headers["HEADER"].controllers.data))
+        visit_tree(root_node, Node.get_childs, lambda node, depth : print("  "*depth, node.headers["HEADER"].node_id, node.name, hex(node.node_type_id), *[node_type.name for node_type in node.node_types]))
 
         # export SKIN nodes
 #        export_mesh([node for node in iterate_tree(root_node, Node.get_childs) if "MESH" in node.headers and "SKIN" not in node.headers], filename)
