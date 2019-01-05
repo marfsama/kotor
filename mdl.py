@@ -24,9 +24,13 @@ def object_attributes_to_ordered_dict(obj,  attributes):
 
 class Encoder(json.JSONEncoder):
     def default(self, object):
+        # is it an object and has the serializeable function? Then use that
         serializable_func = getattr(object, "__serialize__", None) 
         if callable(serializable_func):
             return serializable_func()
+        # is it a byte array? write as hex string
+        if isinstance(object, bytes):
+            return ",".join([hex(b) for b in object])
         # Let the base class default method raise the TypeError
         return json.JSONEncoder.default(self, object)
 
@@ -47,7 +51,7 @@ class Array:
 
     def __str__(self):
         return """{type_name}: {{offset: 0x{offset:x}, used: {used_entries}, allocated: {allocated_entries}, data: {data}}}""".format(type_name=type(self).__name__, **vars(self))
-        
+
 
 class NodeHeader:
     def __init__(self, file, parent_block):
@@ -57,8 +61,8 @@ class NodeHeader:
             self.node_id = readu16(file)
             file.read(4+2) # unknown
             self.parent_node_start = readu32(file)
-            self.position = readlist(readfloat, file, 3) # x,y,z
-            self.rotation = readlist(readfloat, file, 4) # w,x,y,z
+            self.position = Vertex(file)
+            self.rotation = Quaternion(file)
             self.child_offsets = Array(file)
             self.controllers = Array(file)
             self.controller_data = Array(file)
@@ -77,29 +81,59 @@ class NodeHeader:
             with self.parent_block.block("Controller.data", file):
                 self.controller_data.data = readlist(readfloat, file, self.controller_data.allocated_entries)
 
+        # each controller can read its values from the data array
+        for controller in self.controllers.data:
+            controller.read_data_rows(self.controller_data.data)
+
+    def __serialize__(self):
+        base_attributes = object_attributes_to_ordered_dict(self,  ['parent_node', 'node_id' , 'parent_node_start',  'position', 'rotation', 'child_offsets', 'controllers', 'controller_data'])
+        base_attributes["controllers"] = self.controllers.data
+        return base_attributes
+
     def __str__(self):
         return """{type_name}: {{parent_node: 0x{parent_node:x}, node_id: {node_id}, parent_node_start: {parent_node_start}, position: {position}, rotation: {rotation}, child_offsets: {child_offsets}, controllers: {controllers}, controller_data: {controller_data}}}""".format(type_name=type(self).__name__, **vars(self))
 
+
+class ControllerRow:
+    def __init__(self, timekey,  values):
+        self.timekey = timekey
+        self.values = values
+        
+    def __serialize__(self):
+        return object_attributes_to_ordered_dict(self,  ['timekey', 'values'])
+
+
 class Controller:
     def __init__(self, file):
-        # TODO: Controller type to controller enum
-        self.controller_type = readu32(file)
-        file.read(2) # unknown
-        self.rows = readu16(file)
+        self.controller_type_id = readu32(file)
+        self.controller_type = CONTROLLER_TYPES.get(self.controller_type_id,  ControllerType('unknown',  self.controller_type_id))
+        self.unknown1 = file.read(2)
+        self.row_count = readu16(file)
         self.timekey_offset = readu16(file)
         self.datakey_offset = readu16(file)
-        self.columns = readu8(file)
-        file.read(3) # unknown
+        self.column_count = readu8(file)
+        self.unknown2 = file.read(3)
+        # read later
+        self.rows = []
+        
+    def read_data_rows(self,  data):
+        for row_index in range(self.row_count):
+            start_slice = self.datakey_offset + self.column_count * row_index
+            row = ControllerRow(data[self.timekey_offset+row_index],  data[start_slice:start_slice+self.column_count])
+            self.rows.append(row)
+        
+    def __serialize__(self):
+        return object_attributes_to_ordered_dict(self,  ['controller_type_id', 'controller_type','unknown1', 'row_count' , 'timekey_offset',  'datakey_offset', 'column_count','unknown2',  'rows'])
 
     def __str__(self):
-        return """{type_name}: {{controller_type: {controller_type}, rows: {rows}, columns: {columns}, timekey_offset: {timekey_offset}, datakey_offset: {datakey_offset}}}""".format(type_name=type(self).__name__, **vars(self))
+        return """{type_name}: {{controller_type: {controller_type}, row_count: {row_count}, column_count: {column_count}, timekey_offset: {timekey_offset}, datakey_offset: {datakey_offset}}}""".format(type_name=type(self).__name__, **vars(self))
     
 
 class MeshHeader:
     def __init__(self, file, parent_block):
         self.parent_block = parent_block
         with parent_block.block("MeshHeader", file):
-            file.read(4+4) # unknown
+            self.unknown1 = file.read(4+4)
             self.faces = Array(file);
             self.bounding_box = (readlist(readfloat, file, 3), readlist(readfloat, file, 3))
             self.radius = readfloat(file)  # radius of bounding sphere
@@ -109,7 +143,7 @@ class MeshHeader:
             self.transparency_hint = readu32(file)
             self.texture_name = file.read(32).partition(b'\0')[0].decode("utf-8")
             self.texture_name2 = file.read(32).partition(b'\0')[0].decode("utf-8")
-            file.read(24) # unknown
+            self.unknown2 = file.read(24) # unknown
             # read array where the vertex counts are saved. array always has size 1.
             self.vertex_count_array = Array(file);
             # read array where the vertex offsets are saved. array always has size 1.
@@ -117,22 +151,22 @@ class MeshHeader:
             if self.vertex_count_array.used_entries != 1 or self.vertex_offset_array.used_entries != 1:
                 raise ValueError("Illegal vertex array count. Only 1 is supported at the moment.")
             self.unknown_array = Array(file)
-            file.read(24 + 16) # other unknown stuff
+            self.unknown3 = file.read(24 + 16) # other unknown stuff
             self.mdx_structure_size = readu32(file)
-            file.read(8) # unknown
+            self.unknown4 = file.read(8) # unknown
             self.vertex_normals_offset = readu32(file);
-            file.read(4) # unknown
+            self.unknown5 = file.read(4) # unknown
             self.uv_offset1 = readu32(file)
             self.uv_offset2 = readu32(file)
-            file.read(24) # unknown
+            self.unknown6 = file.read(24) # unknown
             self.vertex_count  = readu16(file)
             self.texture_count = readu16(file)
-            file.read(2) # unknown
+            self.unknown7 = file.read(2) # unknown
             self.shadow = readu16(file) != 0
             self.render = readu16(file) != 0
-            file.read(10) # unknown
+            self.unknown8 = file.read(10) # unknown
 #	    if (ctx.kotor2)
-            file.read(8) # unknown
+            self.unknown9 = file.read(8) # unknown
 
             self.mdx_offset = readu32(file)
             self.vertex_coordinates_offset = readu32(file)
@@ -140,6 +174,13 @@ class MeshHeader:
         # read later
         self.vertices = []
         self.vertex_indices = []
+        
+    def __serialize__(self):
+        return object_attributes_to_ordered_dict(self,  ['unknown1','faces', 'bounding_box', 'radius' , 'averange',  'diffuse', 'ambient','transparency_hint',  
+        'texture_name',  'texture_name2', 'unknown2','vertex_count_array', 'vertex_offset_array','unknown_array', 'unknown3',  'mdx_structure_size', 'unknown4', 
+        'vertex_normals_offset', 'unknown5', 'uv_offset1', 'uv_offset2', 'unknown6', 'vertex_count', 'texture_count', 'unknown7', 'shadow', 'render', 'unknown8', 'unknown9', 
+        'mdx_offset', 'vertex_coordinates_offset'])
+        
 
     def read_node(self, file):
         # read vertex count array and vertex offset array
@@ -167,7 +208,6 @@ class MeshHeader:
         with self.parent_block.block("MeshHeader.vertex_indices_array", file):
             self.vertex_indices = readlist(readu16, file, self.vertex_count_array.data[0])
 
-
     def __str__(self):
         return """{type_name}: {{faces: {faces}, bounding_box: {bounding_box}, radius: {radius}, averange: {averange}, diffuse: {diffuse}, ambient: {ambient}, transparency_hint: {transparency_hint}, texture_name: {texture_name}, texture_name2: {texture_name2}, mdx_structure_size: {mdx_structure_size}, vertex_normals_offset: 0x{vertex_normals_offset:x}, uv_offset1: 0x{uv_offset1:x}, uv_offset2: 0x{uv_offset2:x}, vertex_count: {vertex_count}, texture_count: {texture_count}, shadow: {shadow}, render: {render}, mdx_offset: 0x{mdx_offset:x}, vertex_coordinates_offset: 0x{vertex_coordinates_offset:x}, vertex_count_array: {vertex_count_array}, vertex_offset_array: {vertex_offset_array}, faces: {faces}, vertices: [{verticesstr}], vertex_indices: [{vertex_indices}] }}""".format(type_name=type(self).__name__, **vars(self), verticesstr=", ".join([str(vertex) for vertex in self.vertices]))
 
@@ -194,6 +234,18 @@ class Vertex:
     def __str__(self):
         return """{{{x}, {y}, {z}}}""".format(**vars(self))
 
+class Quaternion:
+    def __init__(self, file):
+        self.w = readfloat(file)  # real part
+        self.x = readfloat(file)  # imaginary
+        self.y = readfloat(file)  # imaginary
+        self.z = readfloat(file)  # imaginary
+        
+    def __serialize__(self):
+        return object_attributes_to_ordered_dict(self,  ['w','x', 'y','z'])
+        
+    def __str__(self):
+        return """{{{w}, {x}, {y}, {z}}}""".format(**vars(self))
 
 class SkinMeshHeader:
     def __init__(self, file, parent_block):
@@ -262,6 +314,9 @@ class NodeType:
     def matches(self, value):
         return value & self.bitfield
     
+    def __serialize__(self):
+        return self.name
+        
     def __str__(self):
         return """{type_name}: {{name: {name}, bitfield: {bitfield}}}""".format(type_name=type(self).__name__, **vars(self))
 
@@ -278,6 +333,24 @@ NODE_TYPES = [
   NodeType("AABB",      0x00000200 ),
   NodeType("SABER",     0x00000800 )
 ]
+
+class ControllerType:
+    def __init__(self, name, id, controller_class = None):
+        self.name = name
+        self.id = id
+        self.controller_class = controller_class
+
+    def __serialize__(self):
+        return self.name
+
+
+CONTROLLER_TYPES = {
+    8: ControllerType("position", 8), 
+    20: ControllerType("orientation", 20), 
+    36: ControllerType("scale", 36), 
+    100: ControllerType("vertical displacement", 100), 
+    132: ControllerType("frame end", 132), 
+}
 
 
 class Header:
@@ -297,16 +370,16 @@ class Header:
 class GeometryHeader:
     def __init__(self, file, parent_block):
         with parent_block.block("GeometryHeader", file):
-            file.read(8) # unknown
+            self.function_pointers = file.read(8)
             self.name = file.read(32).partition(b'\0')[0].decode("utf-8")
             self.node_offset = readu32(file)
             self.node_count = readu32(file)
-            file.read(28) # unknown
+            self.unknown2 = file.read(28) # unknown
             self.type = readu8(file)
-            file.read(3) # unknown
+            self.unknown3 = file.read(3) # unknown
 
     def __serialize__(self):
-        return object_attributes_to_ordered_dict(self,  ['name', 'node_offset','node_count', 'type'])
+        return object_attributes_to_ordered_dict(self,  ['function_pointers','name', 'node_offset','node_count', 'unknown2', 'type',  'unknown3'])
 
     def __str__(self):
         return """{type_name}: {{name: {name}, node_offset: 0x{node_offset:x}, node_count: {node_count}, type: {type}}}""".format(type_name=type(self).__name__, **vars(self))
@@ -318,9 +391,9 @@ class ModelHeader:
             self.geometry_flags = readu16(file)
             self.classification = readu8(file)
             self.fogged = readu8(file)
-            file.read(4)
+            self.unknown1 = file.read(4)
             self.animation_offset_array = Array(file)
-            file.read(4) # unknown
+            self.unknown2 = file.read(4) # unknown
             self.bounding_box = readlist(Vertex, file, 2)
             self.radius = readfloat(file)
             self.scale = readfloat(file)
@@ -341,7 +414,7 @@ class ModelHeader:
             self.animations.append(animation_header)
 
     def __serialize__(self):
-        return object_attributes_to_ordered_dict(self,  ['geometry_flags', 'classification','fogged', 'animation_offset_array','bounding_box', 'radius', 'scale', 'super_model'])
+        return object_attributes_to_ordered_dict(self,  ['geometry_flags', 'classification','fogged', 'unknown1','animation_offset_array','unknown2','bounding_box', 'radius', 'scale', 'super_model'])
 
     def __str__(self):
         return """{type_name}: {{classification: {classification}, fogged: {fogged}, animation_offset_array: {animation_offset_array}, bounding_box: {bounding_box}, radius: {radius}, scale: {scale}, super_model: {super_model}, animations: \n[{animations_str}]}}""".format(type_name=type(self).__name__, **vars(self), animations_str="\n".join([str(animation) for animation in self.animations]))
@@ -356,7 +429,8 @@ class AnimationHeader:
             self.name = file.read(32).partition(b'\0')[0].decode("utf-8")
             self.events = Array(file)
             file.read(4) # unknown
-        # TODO: read animation nodes from geometry header
+
+        # read later
         self.animation_node = None
 
     def read_events(self, file):
@@ -369,7 +443,6 @@ class AnimationHeader:
     def read_animation_node(self, file):
         self.animation_node = read_node_tree(file, self.geometry_header.node_offset,  self.parent_block)
         
-
     def __str__(self):
         return """{type_name}: {{geometry_header: {geometry_header}, length: {length}, transition_time: {transition_time}, name: {name}, events: [{eventsstr}], node: {animation_node}}}""".format(type_name=type(self).__name__, **vars(self), eventsstr=", ".join([str(event) for event in self.events.data]))
 
@@ -387,9 +460,9 @@ class NamesHeader:
         self.parent_block = parent_block
         with parent_block.block("NamesHeader", file):
             self.root_node = readu32(file)
-            file.read(4) # unknown
-            file.read(4) # copy of Header.mdx_size
-            file.read(4) # unknown
+            self.unknown1 = readu32(file)
+            self.mdx_size = readu32(file)
+            self.unknown2 = readu32(file)
             self.names_offset_array = Array(file)
 
     def read_names(self, file):
@@ -404,6 +477,9 @@ class NamesHeader:
             file.seek(name_offset + HEADER_OFFSET)
             self.names.append(next(read_terminated_token(file, null_terminated)).decode("utf-8"))
         block.close_block(file.tell())
+
+    def __serialize__(self):
+        return object_attributes_to_ordered_dict(self,  ['root_node', 'unknown1' , 'mdx_size', 'unknown2',  'names_offset_array'])
 
     def __str__(self):
         return """{type_name}: {{root_node: 0x{root_node:x}, names_offset_array: {names_offset_array}}}""".format(type_name=type(self).__name__, **vars(self))
@@ -420,6 +496,9 @@ class Node:
 
     def get_childs(self):
         return self.childs
+
+    def __serialize__(self):
+        return object_attributes_to_ordered_dict(self,  ['node_type_id', 'node_types' , 'name',  'headers'])
 
     def __str__(self):
         return """{type_name}: {{node_type_id: 0x{node_type_id:x} ({node_types_str})}}""".format(type_name=type(self).__name__, **vars(self),  node_types_str=",".join([type.name for type in self.node_types])) 
@@ -450,6 +529,10 @@ def update_node_name(names, node, depth):
 
 
 def readModelFile(filename, block):
+    def put_node_in_dict(node_by_name,  node_by_id,  node,  depth):
+        node_by_name[node.name] = node
+        node_by_id[node.headers["HEADER"].node_id] = node
+        
     with open(filename, "rb") as file:
         model = Model()
         model.header = Header(file, block)
@@ -458,17 +541,16 @@ def readModelFile(filename, block):
         model.names_header = NamesHeader(file, block)
         # read animations
         model.model_header.read_animations(file)
-#        print(header)
-#        print(geometry_header)
-#        print(model_header)
-#        print(names_header)
 
         model.names_header.read_names(file)
         model.root_node = read_node_tree(file, model.names_header.root_node, block)
         # update names
         visit_tree(model.root_node, Node.get_childs, partial(update_node_name, model.names_header.names))
-        # print tree
-#        visit_tree(root_node, Node.get_childs, lambda node, depth : print("  "*depth, node.headers["HEADER"].node_id, node.name, hex(node.node_type_id), *[node_type.name for node_type in node.node_types], *[header for name, header in node.headers.items()]))
+        # create node dictionary by name and id
+        model.node_by_name = OrderedDict()
+        model.node_by_id = {}
+        visit_tree(model.root_node, Node.get_childs, partial(put_node_in_dict, model.node_by_name, model.node_by_id))
+
 #        visit_tree(root_node, Node.get_childs, lambda node, depth : print("  "*depth, node.headers["HEADER"].node_id, node.name, hex(node.node_type_id), *[node_type.name for node_type in node.node_types]))
 
         # export SKIN nodes
@@ -503,7 +585,7 @@ def print_block(block, filename):
         visit_tree(block, Block.get_childs, lambda block, depth : f.write("{}{} {} {}\n".format("  "*depth, block.start, block.end, block.name)))
     print("block file written to "+basename+".blk")
 
-def exportheader(args):
+def export_header(args):
     block = Block("root", 0)
     model = readModelFile(args.input, block)
     block.close_block(os.stat(args.input).st_size)
@@ -517,19 +599,69 @@ def exportheader(args):
     if args.m:
         json_dict["model_header"] = model.model_header
         
+    if args.n:
+        json_dict["names_header"] = model.names_header
+        
+    print(json.dumps(json_dict, indent=4, cls=Encoder))
+
+def export_nodes(args):
+    def node_details(node, depth):
+        node_header = node.headers["HEADER"]
+        node_json = OrderedDict()
+        node_json["id"] = node_header.node_id
+        node_json["name"] = node.name
+        node_json["types"] = [type.name for type in node.node_types]
+        node_json["parent"] = node_header.parent_node
+        names_tree[node_json["id"]] = node_json
+
+    block = Block("root", 0)
+    model = readModelFile(args.input, block)
+    block.close_block(os.stat(args.input).st_size)
+    
+    json_dict = OrderedDict()
+    if args.ln:
+        names = list(model.node_by_name.keys())
+        json_dict["names"] = names
+
+    if args.ld:
+        names_tree = {}
+        visit_tree(model.root_node, Node.get_childs, node_details)
+        json_dict["names_tree"] = names_tree
+
+    if args.eh:
+        if not args.n:
+            print ("error: need to specify node name or number (-n) for export header (-eh)")
+            return
+        node = model.node_by_name.get(args.n)
+        if not node:
+            node = model.node_by_id.get(args.n)
+        if not node:
+            print("cannot find node",  args.n,  "in model")
+            return
+        json_dict["nodes"] = [node]
+
     print(json.dumps(json_dict, indent=4, cls=Encoder))
 
 
 def parse_command_line():
     parser = argparse.ArgumentParser(description='Process MDL files.')
-    
     subparsers = parser.add_subparsers(help='sub-command help',  description='')
+    
     parser_header = subparsers.add_parser('exportheader', help='export file header')
     parser_header.add_argument('input',  help ='Model file path')
     parser_header.add_argument('-f', action="store_true",  help ='file header')
     parser_header.add_argument('-g', action="store_true",  help='geometry header')
     parser_header.add_argument('-m', action="store_true",  help='model header')
-    parser_header.set_defaults(func=exportheader)
+    parser_header.add_argument('-n', action="store_true",  help='names header')
+    parser_header.set_defaults(func=export_header)
+    
+    parser_nodes = subparsers.add_parser('exportnodes', help='export geometry nodes')
+    parser_nodes.add_argument('input',  help ='Model file path')
+    parser_nodes.add_argument('-ln', action="store_true",  help ='list node names')
+    parser_nodes.add_argument('-ld', action="store_true",  help ='list node hierarchy details') 
+    parser_nodes.add_argument('-n',  help ='node name or number') 
+    parser_nodes.add_argument('-eh', action="store_true",  help ='export header') 
+    parser_nodes.set_defaults(func=export_nodes)
 
     parsed = parser.parse_args()
     parsed.func(parsed)
