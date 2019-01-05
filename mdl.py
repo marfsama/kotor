@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import json
 
 from functools import partial
 from collections import OrderedDict
@@ -12,6 +13,27 @@ from tools import *
 
 # size of file header. each offset in mdl must be adjusted by the header offset.
 HEADER_OFFSET = 12
+
+def object_attributes_to_ordered_dict(obj,  attributes):
+    """Returns the specified attributes  from the object in an OrderedDict."""
+    dict = OrderedDict()
+    object_vars = vars(obj)
+    for attribute in attributes:
+        dict[attribute] = object_vars[attribute]
+    return dict
+
+class Encoder(json.JSONEncoder):
+    def default(self, object):
+        serializable_func = getattr(object, "__serialize__", None) 
+        if callable(serializable_func):
+            return serializable_func()
+        # Let the base class default method raise the TypeError
+        return json.JSONEncoder.default(self, object)
+
+class Model:
+    pass
+
+
 class Array:
     def __init__(self, file):
         self.offset = readu32(file)
@@ -19,6 +41,9 @@ class Array:
         self.allocated_entries= readu32(file)
         # read later
         self.data = []
+
+    def __serialize__(self):
+        return object_attributes_to_ordered_dict(self,  ['offset', 'used_entries','allocated_entries'])
 
     def __str__(self):
         return """{type_name}: {{offset: 0x{offset:x}, used: {used_entries}, allocated: {allocated_entries}, data: {data}}}""".format(type_name=type(self).__name__, **vars(self))
@@ -162,6 +187,10 @@ class Vertex:
         self.x = readfloat(file)
         self.y = readfloat(file)
         self.z = readfloat(file)
+        
+    def __serialize__(self):
+        return object_attributes_to_ordered_dict(self,  ['x', 'y','z'])
+        
     def __str__(self):
         return """{{{x}, {y}, {z}}}""".format(**vars(self))
 
@@ -258,6 +287,9 @@ class Header:
             self.mdl_size = readu32(file)
             self.mdx_size = readu32(file)
 
+    def __serialize__(self):
+        return object_attributes_to_ordered_dict(self,  ['mdl_size', 'mdx_size'])
+
     def __str__(self):
         return """{name}: {{mdl_size: {mdl_size}, mdx_size: {mdx_size}}}""".format(name=type(self).__name__, **vars(self))
 
@@ -273,6 +305,9 @@ class GeometryHeader:
             self.type = readu8(file)
             file.read(3) # unknown
 
+    def __serialize__(self):
+        return object_attributes_to_ordered_dict(self,  ['name', 'node_offset','node_count', 'type'])
+
     def __str__(self):
         return """{type_name}: {{name: {name}, node_offset: 0x{node_offset:x}, node_count: {node_count}, type: {type}}}""".format(type_name=type(self).__name__, **vars(self))
 
@@ -286,7 +321,7 @@ class ModelHeader:
             file.read(4)
             self.animation_offset_array = Array(file)
             file.read(4) # unknown
-            self.bounding_box = readlist(readfloat, file, 6)
+            self.bounding_box = readlist(Vertex, file, 2)
             self.radius = readfloat(file)
             self.scale = readfloat(file)
             self.super_model = file.read(32).partition(b'\0')[0].decode("utf-8")
@@ -305,6 +340,8 @@ class ModelHeader:
             animation_header.read_animation_node(file)
             self.animations.append(animation_header)
 
+    def __serialize__(self):
+        return object_attributes_to_ordered_dict(self,  ['geometry_flags', 'classification','fogged', 'animation_offset_array','bounding_box', 'radius', 'scale', 'super_model'])
 
     def __str__(self):
         return """{type_name}: {{classification: {classification}, fogged: {fogged}, animation_offset_array: {animation_offset_array}, bounding_box: {bounding_box}, radius: {radius}, scale: {scale}, super_model: {super_model}, animations: \n[{animations_str}]}}""".format(type_name=type(self).__name__, **vars(self), animations_str="\n".join([str(animation) for animation in self.animations]))
@@ -414,28 +451,30 @@ def update_node_name(names, node, depth):
 
 def readModelFile(filename, block):
     with open(filename, "rb") as file:
-        header = Header(file, block)
-        geometry_header = GeometryHeader(file, block)
-        model_header = ModelHeader(file, block)
-        names_header = NamesHeader(file, block)
+        model = Model()
+        model.header = Header(file, block)
+        model.geometry_header = GeometryHeader(file, block)
+        model.model_header = ModelHeader(file, block)
+        model.names_header = NamesHeader(file, block)
         # read animations
-        model_header.read_animations(file)
-        print(header)
-        print(geometry_header)
-        print(model_header)
-        print(names_header)
+        model.model_header.read_animations(file)
+#        print(header)
+#        print(geometry_header)
+#        print(model_header)
+#        print(names_header)
 
-        names_header.read_names(file)
-        root_node = read_node_tree(file, names_header.root_node, block)
+        model.names_header.read_names(file)
+        model.root_node = read_node_tree(file, model.names_header.root_node, block)
         # update names
-        visit_tree(root_node, Node.get_childs, partial(update_node_name, names_header.names))
+        visit_tree(model.root_node, Node.get_childs, partial(update_node_name, model.names_header.names))
         # print tree
 #        visit_tree(root_node, Node.get_childs, lambda node, depth : print("  "*depth, node.headers["HEADER"].node_id, node.name, hex(node.node_type_id), *[node_type.name for node_type in node.node_types], *[header for name, header in node.headers.items()]))
-        visit_tree(root_node, Node.get_childs, lambda node, depth : print("  "*depth, node.headers["HEADER"].node_id, node.name, hex(node.node_type_id), *[node_type.name for node_type in node.node_types]))
+#        visit_tree(root_node, Node.get_childs, lambda node, depth : print("  "*depth, node.headers["HEADER"].node_id, node.name, hex(node.node_type_id), *[node_type.name for node_type in node.node_types]))
 
         # export SKIN nodes
 #        export_mesh([node for node in iterate_tree(root_node, Node.get_childs) if "MESH" in node.headers and "SKIN" not in node.headers], filename)
-        export_mesh([node for node in iterate_tree(root_node, Node.get_childs) if "SKIN" in node.headers], filename)
+#        export_mesh([node for node in iterate_tree(root_node, Node.get_childs) if "SKIN" in node.headers], filename)
+    return model
 
 
 def export_mesh(nodes, filename):
@@ -464,17 +503,38 @@ def print_block(block, filename):
         visit_tree(block, Block.get_childs, lambda block, depth : f.write("{}{} {} {}\n".format("  "*depth, block.start, block.end, block.name)))
     print("block file written to "+basename+".blk")
 
+def exportheader(args):
+    block = Block("root", 0)
+    model = readModelFile(args.input, block)
+    block.close_block(os.stat(args.input).st_size)
+    json_dict = OrderedDict()
+    if args.f:
+        json_dict["header"] = model.header
+
+    if args.g:
+        json_dict["geometry_header"] = model.geometry_header
+
+    if args.m:
+        json_dict["model_header"] = model.model_header
+        
+    print(json.dumps(json_dict, indent=4, cls=Encoder))
+
 
 def parse_command_line():
     parser = argparse.ArgumentParser(description='Process MDL files.')
-    parser.add_argument('input', help='path to mdl/mdx file')
+    
+    subparsers = parser.add_subparsers(help='sub-command help',  description='')
+    parser_header = subparsers.add_parser('exportheader', help='export file header')
+    parser_header.add_argument('input',  help ='Model file path')
+    parser_header.add_argument('-f', action="store_true",  help ='file header')
+    parser_header.add_argument('-g', action="store_true",  help='geometry header')
+    parser_header.add_argument('-m', action="store_true",  help='model header')
+    parser_header.set_defaults(func=exportheader)
 
     parsed = parser.parse_args()
+    parsed.func(parsed)
 
-    block = Block("root", 0)
-    model = readModelFile(parsed.input, block)
-    block.close_block(os.stat(parsed.input).st_size)
-    print_block(block, parsed.input)
+#    print_block(block, parsed.input)
 
 def main():
     parse_command_line()
