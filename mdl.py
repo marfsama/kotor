@@ -127,7 +127,32 @@ class Controller:
 
     def __str__(self):
         return """{type_name}: {{controller_type: {controller_type}, row_count: {row_count}, column_count: {column_count}, timekey_offset: {timekey_offset}, datakey_offset: {datakey_offset}}}""".format(type_name=type(self).__name__, **vars(self))
-    
+
+
+class LightHeader:
+    def __init__(self, file, parent_block):
+        self.parent_block = parent_block
+        with parent_block.block("LightHeader", file):
+#http://web.archive.org/web/20050213205343/torlack.com/index.html?topics=nwndata_binmdl
+            self.flare_radius = readfloat(file)
+            self.unknown_array = Array(file)
+            self.flare_sizes = Array(file)
+            self.flare_positions = Array(file)
+            self.flare_color_shifts = readlist(readu32,  file,  3)
+            self.flare_texture_names_offsets = Array(file)
+            self.light_priority = readu32(file)
+            self.ambient_only = readu32(file)
+            self.dynamic_type = readu32(file)
+            self.affect_dynamic_flag = readu32(file)
+            self.shadow_flag = readu32(file)
+            self.generate_flare_flag = readu32(file)
+            self.fading_flag = readu32(file)
+
+    def read_node(self, file):
+        pass
+
+    def __serialize__(self):
+        return object_attributes_to_ordered_dict(self,  ['flare_radius', 'unknown_array', 'flare_sizes', 'flare_positions', 'flare_color_shifts',  'flare_texture_names_offsets', 'light_priority', 'ambient_only',  'dynamic_type', 'affect_dynamic_flag', 'shadow_flag','generate_flare_flag',   'fading_flag'])
 
 class MeshHeader:
     def __init__(self, file, parent_block):
@@ -297,12 +322,24 @@ class DanglyMeshHeader:
             self.displacement = readfloat(file)
             self.tightness = readfloat(file)
             self.period = readfloat(file)
-            file.read(4) # unknown
+            self.unknown_array_offset = readu32(file)
+        # read later
+        self.unknown_array = []
 
     def read_node(self, file):
         file.seek(self.constraints.offset+HEADER_OFFSET)
         with self.parent_block.block("DanglyMeshHeader.constraints", file):
-            self.constraints.data = readlist(readfloat, file, self.constraints.allocated_entries*4)
+            self.constraints.data = readlist(readfloat, file, self.constraints.allocated_entries)
+
+        # read unknown array. same size as constraints, 3 floats for each entry
+        file.seek(self.unknown_array_offset+HEADER_OFFSET)
+        with self.parent_block.block("DanglyMeshHeader.unknown_array", file):
+            self.unknown_array = readlist(readfloat, file, self.constraints.allocated_entries*3)
+
+    def __serialize__(self):
+        base_attributes = object_attributes_to_ordered_dict(self,  ['constraints','displacement', 'tightness', 'period' , 'unknown_array_offset',  'unknown_array'])
+        base_attributes["constraints_data"] = self.constraints.data
+        return base_attributes
 
     def __str__(self):
         return """{type_name}: {{displacement: {displacement}, tightness: {tightness}, period: {period}, constraints: {constraints}}}""".format(type_name=type(self).__name__, **vars(self))
@@ -325,7 +362,7 @@ class NodeType:
 
 NODE_TYPES = [
   NodeType("HEADER",    0x00000001, NodeHeader),
-  NodeType("LIGHT",     0x00000002 ),
+  NodeType("LIGHT",     0x00000002,  LightHeader),
   NodeType("EMITTER",   0x00000004 ),
   NodeType("CAMERA",    0x00000008 ),
   NodeType("REFERENCE", 0x00000010 ),
@@ -351,8 +388,11 @@ CONTROLLER_TYPES = {
     8: ControllerType("position", 8), 
     20: ControllerType("orientation", 20), 
     36: ControllerType("scale", 36), 
+    76: ControllerType("color", 76), 
+    88: ControllerType("birth rate", 88), 
     100: ControllerType("vertical displacement", 100), 
     132: ControllerType("frame end", 132), 
+    140: ControllerType("gravitation", 140), 
 }
 
 
@@ -581,9 +621,12 @@ def export_mesh(nodes, filename):
             vertex_offset = vertex_offset + len(mesh.vertices)
     print("mesh written to "+basename+".obj")
 
-def print_block(block, filename):
+def export_block(args):
+    block = Block("root", 0)
+    readModelFile(args.input, block)
+    block.close_block(os.stat(args.input).st_size)
     block.sort()
-    basename = os.path.splitext(os.path.split(filename)[1])[0]
+    basename = os.path.splitext(os.path.split(args.input)[1])[0]
     with open(basename+".blk", 'w') as f:
         visit_tree(block, Block.get_childs, lambda block, depth : f.write("{}{} {} {}\n".format("  "*depth, block.start, block.end, block.name)))
     print("block file written to "+basename+".blk")
@@ -664,7 +707,14 @@ def parse_command_line():
     parser_nodes.add_argument('-ld', action="store_true",  help ='list node hierarchy details') 
     parser_nodes.add_argument('-n',  help ='node name or number') 
     parser_nodes.add_argument('-eh', action="store_true",  help ='export header') 
+    parser_nodes.add_argument('-em', action="store_true",  help ='export mesh') 
+    parser_nodes.add_argument('-eb', action="store_true",  help ='export bones') 
     parser_nodes.set_defaults(func=export_nodes)
+
+    parser_blocks = subparsers.add_parser('exportblocks', help='export blocks')
+    parser_blocks.add_argument('input',  help ='Model file path')
+    parser_blocks.set_defaults(func=export_block)
+
 
     parsed = parser.parse_args()
     parsed.func(parsed)
