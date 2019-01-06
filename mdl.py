@@ -251,14 +251,14 @@ class SkinMeshHeader:
     def __init__(self, file, parent_block):
         self.parent_block = parent_block
         with parent_block.block("SkinMeshHeader", file):
-            file.read(20) # unknown
+            self.unknown1 = readlist(readu32,  file,  5)
             self.bone_map_offset = readu32(file)
             self.bone_map_count = readu32(file)
-            self.unknown_array1 = Array(file)
-            self.unknown_array2 = Array(file)
-            self.unknown_array3 = Array(file)
-            self.bone_nodes = readlist(readu16, file, 15) # list of nodes which can affect vertices from this node
-            file.read(6) # unknown
+            self.bone_quaternions = Array(file)
+            self.bone_vertices = Array(file)
+            self.bone_constants = Array(file)
+            self.bone_nodes = readlist(readu16, file, 17) # list of nodes which can affect vertices from this node
+            self.unknown2 = file.read(2)
         # read later
         self.bone_map = []
 
@@ -269,19 +269,22 @@ class SkinMeshHeader:
             self.bone_map = readlist(readu32, file, self.bone_map_count)
 
         # 4 floats each node. rotation quaternion?
-        file.seek(self.unknown_array1.offset+HEADER_OFFSET)
-        with self.parent_block.block("SkinMeshHeader.unknown_array1", file):
-            self.unknown_array1 .data = readlist(readfloat, file, self.unknown_array1.allocated_entries*4)
+        file.seek(self.bone_quaternions.offset+HEADER_OFFSET)
+        with self.parent_block.block("SkinMeshHeader.bone_quaternions", file):
+            self.bone_quaternions .data = readlist(readfloat, file, self.bone_quaternions.allocated_entries*4)
     
         # 3 floats each node. translation?
-        file.seek(self.unknown_array2.offset+HEADER_OFFSET)
-        with self.parent_block.block("SkinMeshHeader.unknown_array2", file):
-            self.unknown_array2.data = readlist(readfloat, file, self.unknown_array2.allocated_entries*3)
+        file.seek(self.bone_vertices.offset+HEADER_OFFSET)
+        with self.parent_block.block("SkinMeshHeader.bone_vertices", file):
+            self.bone_vertices.data = readlist(readfloat, file, self.bone_vertices.allocated_entries*3)
 
         # 1 floats each node. scale/length of bone?
-        file.seek(self.unknown_array3.offset+HEADER_OFFSET)
-        with self.parent_block.block("SkinMeshHeader.unknown_array3", file):
-            self.unknown_array3.data = readlist(readfloat, file, self.unknown_array3.allocated_entries)
+        file.seek(self.bone_constants.offset+HEADER_OFFSET)
+        with self.parent_block.block("SkinMeshHeader.bone_constants", file):
+            self.bone_constants.data = readlist(readfloat, file, self.bone_constants.allocated_entries)
+
+    def __serialize__(self):
+        return object_attributes_to_ordered_dict(self,  ['unknown1','bone_map_offset', 'bone_map_count', 'bone_quaternions' , 'bone_vertices',  'bone_constants', 'bone_nodes','unknown2'])
 
     def __str__(self):
         return """{type_name}: {{bone_map_offset: 0x{bone_map_offset:x}, bone_map_count: {bone_map_count}, bone_nodes: {bone_nodes}}}""".format(type_name=type(self).__name__, **vars(self))
