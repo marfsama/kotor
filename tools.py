@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 import struct
+import json
+
+from collections import OrderedDict
 
 def readlist(function, file, count):
     list = []
@@ -150,3 +153,23 @@ class Block:
         return "{}, {}".format(self.start, self.end)
 
 
+# serialisation stuff
+def object_attributes_to_ordered_dict(obj,  attributes):
+    """Returns the specified attributes  from the object in an OrderedDict."""
+    dict = OrderedDict()
+    object_vars = vars(obj)
+    for attribute in attributes:
+        dict[attribute] = object_vars[attribute]
+    return dict
+
+class Encoder(json.JSONEncoder):
+    def default(self, object):
+        # is it an object and has the serializeable function? Then use that
+        serializable_func = getattr(object, "__serialize__", None) 
+        if callable(serializable_func):
+            return serializable_func()
+        # is it a byte array? write as hex string
+        if isinstance(object, bytes):
+            return ",".join([hex(b) for b in object])
+        # Let the base class default method raise the TypeError
+        return json.JSONEncoder.default(self, object)

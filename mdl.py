@@ -9,30 +9,13 @@ from collections import OrderedDict
 
 from tools import *
 
+# TODO: evaluate part numbers for models with super models. @see: http://web.archive.org/web/20050213205343/torlack.com/index.html?topics=nwndata_binmdl
+
 # based on xoreos/src/graphics/aurora/model_kotor.cpp from https://github.com/xoreos/xoreos
 
 # size of file header. each offset in mdl must be adjusted by the header offset.
 HEADER_OFFSET = 12
 
-def object_attributes_to_ordered_dict(obj,  attributes):
-    """Returns the specified attributes  from the object in an OrderedDict."""
-    dict = OrderedDict()
-    object_vars = vars(obj)
-    for attribute in attributes:
-        dict[attribute] = object_vars[attribute]
-    return dict
-
-class Encoder(json.JSONEncoder):
-    def default(self, object):
-        # is it an object and has the serializeable function? Then use that
-        serializable_func = getattr(object, "__serialize__", None) 
-        if callable(serializable_func):
-            return serializable_func()
-        # is it a byte array? write as hex string
-        if isinstance(object, bytes):
-            return ",".join([hex(b) for b in object])
-        # Let the base class default method raise the TypeError
-        return json.JSONEncoder.default(self, object)
 
 class Model:
     pass
@@ -181,8 +164,8 @@ class MeshHeader:
             self.unknown4 = file.read(8) # unknown
             self.vertex_normals_offset = readu32(file);
             self.unknown5 = file.read(4) # unknown
-            self.uv_offset1 = readu32(file)
-            self.uv_offset2 = readu32(file)
+            self.uv_offset1 = read32(file)
+            self.uv_offset2 = read32(file)
             self.unknown6 = file.read(24) # unknown
             self.vertex_count  = readu16(file)
             self.texture_count = readu16(file)
@@ -344,6 +327,50 @@ class DanglyMeshHeader:
     def __str__(self):
         return """{type_name}: {{displacement: {displacement}, tightness: {tightness}, period: {period}, constraints: {constraints}}}""".format(type_name=type(self).__name__, **vars(self))
 
+class AabbHeader:
+    """axis oriented bounding box."""
+    def __init__(self, file, parent_block):
+        self.parent_block = parent_block
+        with parent_block.block("AabbHeader", file):
+            self.entry_point_offset = readu32(file)
+        # read later
+        self.aabb_tree = None
+
+    def read_node(self, file):
+        file.seek(self.entry_point_offset+HEADER_OFFSET)
+        self.aabb_tree = AabbEntry(file,  self.parent_block)
+        self.aabb_tree.read_childs(file,  self.parent_block)
+
+    def __serialize__(self):
+        return object_attributes_to_ordered_dict(self,  ['entry_point_offset',  'aabb_tree'])
+
+
+class AabbEntry:
+    def __init__(self,  file,  parent_block):
+        with parent_block.block("AABB_Node", file):
+            self.bounding_box = readlist(Vertex,  file,  2)
+            self.left_node_offset = readu32(file)
+            self.right_node_offset = readu32(file)
+            self.leaf_node_nr = read32(file)
+            self.plane= readu32(file)
+        # read later
+        self.left_node = None
+        self.right_node = None
+
+    def read_childs(self, file,  parent_block):
+        if self.left_node_offset > 0:
+            file.seek(self.left_node_offset+HEADER_OFFSET)
+            self.left_node = AabbEntry(file,  parent_block)
+            self.left_node.read_childs(file,  parent_block)
+            
+        if self.right_node_offset > 0:
+            file.seek(self.right_node_offset+HEADER_OFFSET)
+            self.right_node = AabbEntry(file,  parent_block)
+            self.right_node.read_childs(file,  parent_block)
+
+    def __serialize__(self):
+        return object_attributes_to_ordered_dict(self,  ['bounding_box',  'left_node_offset',  'right_node_offset',  'leaf_node_nr',  'left_node',  'right_node'])
+
 
 class NodeType:
     def __init__(self, name, bitfield, header_type = None):
@@ -370,7 +397,7 @@ NODE_TYPES = [
   NodeType("SKIN",      0x00000040, SkinMeshHeader),
   NodeType("ANIM",      0x00000080 ),
   NodeType("DANGLY",    0x00000100, DanglyMeshHeader),
-  NodeType("AABB",      0x00000200 ),
+  NodeType("AABB",      0x00000200,  AabbHeader),
   NodeType("SABER",     0x00000800 )
 ]
 
@@ -571,7 +598,7 @@ def update_node_name(names, node, depth):
     node.name = names[node.headers["HEADER"].node_id]
 
 
-def readModelFile(filename, block):
+def read_model_file(filename, block):
     def put_node_in_dict(node_by_name,  node_by_id,  node,  depth):
         node_by_name[node.name] = node
         node_by_id[node.headers["HEADER"].node_id] = node
@@ -597,12 +624,12 @@ def readModelFile(filename, block):
 #        visit_tree(root_node, Node.get_childs, lambda node, depth : print("  "*depth, node.headers["HEADER"].node_id, node.name, hex(node.node_type_id), *[node_type.name for node_type in node.node_types]))
 
         # export SKIN nodes
-#        export_mesh([node for node in iterate_tree(root_node, Node.get_childs) if "MESH" in node.headers and "SKIN" not in node.headers], filename)
-#        export_mesh([node for node in iterate_tree(root_node, Node.get_childs) if "SKIN" in node.headers], filename)
+#        export_mesh_backup([node for node in iterate_tree(root_node, Node.get_childs) if "MESH" in node.headers and "SKIN" not in node.headers], filename)
+#        export_mesh_backup([node for node in iterate_tree(root_node, Node.get_childs) if "SKIN" in node.headers], filename)
     return model
 
 
-def export_mesh(nodes, filename):
+def export_mesh_backup(nodes, filename):
     basename = os.path.splitext(os.path.split(filename)[1])[0]
     with open(basename+".obj", 'w') as f:
         f.write("# OBJ file\n")
@@ -623,7 +650,7 @@ def export_mesh(nodes, filename):
 
 def export_block(args):
     block = Block("root", 0)
-    readModelFile(args.input, block)
+    read_model_file(args.input, block)
     block.close_block(os.stat(args.input).st_size)
     block.sort()
     basename = os.path.splitext(os.path.split(args.input)[1])[0]
@@ -633,7 +660,7 @@ def export_block(args):
 
 def export_header(args):
     block = Block("root", 0)
-    model = readModelFile(args.input, block)
+    model = read_model_file(args.input, block)
     block.close_block(os.stat(args.input).st_size)
     json_dict = OrderedDict()
     if args.f:
@@ -661,7 +688,7 @@ def export_nodes(args):
         names_tree[node_json["id"]] = node_json
 
     block = Block("root", 0)
-    model = readModelFile(args.input, block)
+    model = read_model_file(args.input, block)
     block.close_block(os.stat(args.input).st_size)
     
     json_dict = OrderedDict()
@@ -674,9 +701,9 @@ def export_nodes(args):
         visit_tree(model.root_node, Node.get_childs, node_details)
         json_dict["names_tree"] = names_tree
 
-    if args.eh:
+    if args.x:
         if not args.n:
-            print ("error: need to specify node name or number (-n) for export header (-eh)")
+            print ("error: need to specify node name or number (-n) for export header (-x)")
             return
         node = model.node_by_name.get(args.n)
         if not node:
@@ -689,6 +716,32 @@ def export_nodes(args):
     print(json.dumps(json_dict, indent=4, cls=Encoder))
 
 
+def export_mesh(args):
+    block = Block("root", 0)
+    model = read_model_file(args.input, block)
+    block.close_block(os.stat(args.input).st_size)
+
+    if args.n:
+        nodes = [model.node_by_name.get(node_name) for node_name in args.n.split(',')  ]
+    else:
+        nodes = list(model.node_by_name.values())
+
+    print("# OBJ file")
+    vertex_offset = 1
+    for node in nodes:
+        if node and "MESH" in node.headers:
+            mesh = node.headers["MESH"]
+
+            print("o {name}".format(name=node.name))
+            for v in mesh.vertices:
+                print("v %.4f %.4f %.4f" % (v.x, v.y, v.z))
+            for face in mesh.faces.data:
+                print("f",  end='')
+                for i in face.vertex_indices:
+                    print(" %d" % (i + vertex_offset),  end='')
+                print()
+            vertex_offset = vertex_offset + len(mesh.vertices)
+
 def parse_command_line():
     parser = argparse.ArgumentParser(description='Process MDL files.')
     subparsers = parser.add_subparsers(help='sub-command help',  description='')
@@ -700,16 +753,19 @@ def parse_command_line():
     parser_header.add_argument('-m', action="store_true",  help='model header')
     parser_header.add_argument('-n', action="store_true",  help='names header')
     parser_header.set_defaults(func=export_header)
-    
+
     parser_nodes = subparsers.add_parser('exportnodes', help='export geometry nodes')
     parser_nodes.add_argument('input',  help ='Model file path')
     parser_nodes.add_argument('-ln', action="store_true",  help ='list node names')
     parser_nodes.add_argument('-ld', action="store_true",  help ='list node hierarchy details') 
-    parser_nodes.add_argument('-n',  help ='node name or number') 
-    parser_nodes.add_argument('-eh', action="store_true",  help ='export header') 
-    parser_nodes.add_argument('-em', action="store_true",  help ='export mesh') 
-    parser_nodes.add_argument('-eb', action="store_true",  help ='export bones') 
+    parser_nodes.add_argument('-n',  help ='node name or id') 
+    parser_nodes.add_argument('-x', action="store_true",  help ='export node headers') 
     parser_nodes.set_defaults(func=export_nodes)
+
+    parser_mesh = subparsers.add_parser('exportmesh', help='export mesh from geometry nodes') 
+    parser_mesh.add_argument('input',  help ='Model file path')
+    parser_mesh.add_argument('-n',  help ='node name(s) or id(s)') 
+    parser_mesh.set_defaults(func=export_mesh)
 
     parser_blocks = subparsers.add_parser('exportblocks', help='export blocks')
     parser_blocks.add_argument('input',  help ='Model file path')
