@@ -3,5 +3,5 @@ PyOpenGL
 pyshaders
 pyglbuffers
 pillow
-hurry.filesize > 0.9
+hurry.filesize
 openpyxl
