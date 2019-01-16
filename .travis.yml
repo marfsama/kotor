@@ -8,5 +8,5 @@ install:
   - pip install -r requirements.txt
   - pip install pytest-cov
 script:
-  - py.test --cov=kotor --cov-report=kotor
+  - py.test --cov=kotor --cov-report=html
 
