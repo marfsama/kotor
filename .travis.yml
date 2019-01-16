@@ -6,7 +6,6 @@ python:
   - "3.6"
 install:
   - pip install -r requirements.txt
-  - pip install pytest-cov
 script:
-  - py.test --cov=kotor --cov-report=html
+  - py.test
 
