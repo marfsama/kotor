@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
 
-import struct
 import argparse
-import os
 
-from functools import partial
 from tools import *
-from datetime import datetime, timedelta
 from hurry.filesize import size
 
 from key import BuildDate, ressourceTypeTable, RessourceType

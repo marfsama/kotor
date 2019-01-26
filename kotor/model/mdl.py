@@ -7,7 +7,7 @@ import json
 from functools import partial
 from collections import OrderedDict
 
-from tools import *
+from kotor.tools import *
 
 # TODO: evaluate part numbers for models with super models. @see: http://web.archive.org/web/20050213205343/torlack.com/index.html?topics=nwndata_binmdl
 
@@ -19,22 +19,6 @@ HEADER_OFFSET = 12
 
 class Model:
     pass
-
-
-class Array:
-    def __init__(self, file):
-        self.offset = readu32(file)
-        self.used_entries = readu32(file)
-        self.allocated_entries= readu32(file)
-        # read later
-        self.data = []
-
-    def __serialize__(self):
-        return object_attributes_to_ordered_dict(self,  ['offset', 'used_entries','allocated_entries'])
-
-    def __str__(self):
-        return """{type_name}: {{offset: 0x{offset:x}, used: {used_entries}, allocated: {allocated_entries}, data: {data}}}""".format(type_name=type(self).__name__, **vars(self))
-
 
 class NodeHeader:
     def __init__(self, file, parent_block):
@@ -219,41 +203,6 @@ class MeshHeader:
     def __str__(self):
         return """{type_name}: {{faces: {faces}, bounding_box: {bounding_box}, radius: {radius}, averange: {averange}, diffuse: {diffuse}, ambient: {ambient}, transparency_hint: {transparency_hint}, texture_name: {texture_name}, texture_name2: {texture_name2}, mdx_structure_size: {mdx_structure_size}, vertex_normals_offset: 0x{vertex_normals_offset:x}, uv_offset1: 0x{uv_offset1:x}, uv_offset2: 0x{uv_offset2:x}, vertex_count: {vertex_count}, texture_count: {texture_count}, shadow: {shadow}, render: {render}, mdx_offset: 0x{mdx_offset:x}, vertex_coordinates_offset: 0x{vertex_coordinates_offset:x}, vertex_count_array: {vertex_count_array}, vertex_offset_array: {vertex_offset_array}, faces: {faces}, vertices: [{verticesstr}], vertex_indices: [{vertex_indices}] }}""".format(type_name=type(self).__name__, **vars(self), verticesstr=", ".join([str(vertex) for vertex in self.vertices]))
 
-class Face:
-    def __init__(self, file):
-        self.plane_normal = Vertex(file)
-        self.plane_distance = readfloat(file)
-        self.surface = readu32(file)
-        self.adjected_faces = readlist(readu16, file, 3)
-        self.vertex_indices = readlist(readu16, file, 3)
-
-    def __str__(self):
-        return """{type_name}: {{plane_normal: {plane_normal}, plane_distance: {plane_distance}, surface: {surface}, adjected_faces: {adjected_faces}, vertex_indices: {vertex_indices}}}""".format(type_name=type(self).__name__, **vars(self))
-
-class Vertex:
-    def __init__(self, file):
-        self.x = readfloat(file)
-        self.y = readfloat(file)
-        self.z = readfloat(file)
-        
-    def __serialize__(self):
-        return object_attributes_to_ordered_dict(self,  ['x', 'y','z'])
-        
-    def __str__(self):
-        return """{{{x}, {y}, {z}}}""".format(**vars(self))
-
-class Quaternion:
-    def __init__(self, file):
-        self.w = readfloat(file)  # real part
-        self.x = readfloat(file)  # imaginary
-        self.y = readfloat(file)  # imaginary
-        self.z = readfloat(file)  # imaginary
-        
-    def __serialize__(self):
-        return object_attributes_to_ordered_dict(self,  ['w','x', 'y','z'])
-        
-    def __str__(self):
-        return """{{{w}, {x}, {y}, {z}}}""".format(**vars(self))
 
 class SkinMeshHeader:
     def __init__(self, file, parent_block):
@@ -780,5 +729,6 @@ def parse_command_line():
 def main():
     parse_command_line()
 
-main()
+if __name__ == "__main__":
+    main()
 

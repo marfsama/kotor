@@ -1,13 +1,6 @@
 #!/usr/bin/env python3
 
-import struct
-import argparse
-
-
-from functools import partial
 from tools import *
-from datetime import datetime, timedelta
-from hurry.filesize import size
 
 # size of byte chunks to read
 CHUCK_SIZE = 4096

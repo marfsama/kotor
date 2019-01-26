@@ -1,0 +1,9 @@
+index,label,name,description,icon,untrained,keyability,armorcheckpenalty,allclassescanuse,category,maxcr,constant,hostileskill,scd_class,scd_reco,sol_class,sol_reco,sct_class,sct_reco,jcn_class,jcn_reco,jgd_class,jgd_reco,jsn_class,jsn_reco,sas_class,sas_reco,sld_class,sld_reco,sma_class,sma_reco,jwa_class,jwa_reco,jma_class,jma_reco,jwm_class,jwm_reco,tec_class,tec_reco,drx_class,drx_reco,drc_class,drc_reco,droidcanuse,npccanuse
+0,ComputerUse,323,244,isk_compuse,1,INT,0,1,,,SKILL_COMPUTER_USE,0,0,7,0,6,1,1,0,5,0,8,1,2,1,6,0,5,0,8,1,2,0,5,0,8,1,4,1,2,1,3,1,1
+1,Demolitions,324,246,isk_demolitions,0,INT,1,1,,,SKILL_DEMOLITIONS,0,1,2,1,3,1,2,0,8,1,2,0,7,1,2,0,8,1,2,0,7,0,8,1,2,1,5,0,4,1,5,1,1
+2,Stealth,325,248,isk_stealth,0,DEX,1,1,,,SKILL_STEALTH,0,1,1,0,7,0,7,0,6,0,5,1,1,1,1,0,6,0,5,1,1,0,6,0,5,0,6,0,,0,,0,1
+3,Awareness,326,250,isk_awareness,1,WIS,0,1,,,SKILL_AWARENESS,0,1,4,1,2,1,4,1,4,1,3,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,3,1,5,1,2,1,1
+4,Persuade,327,252,isk_persuade,1,CHA,0,1,,,SKILL_PERSUADE,0,1,8,0,8,0,8,1,1,1,4,1,3,1,3,1,1,1,3,1,3,1,1,1,3,0,,0,,0,,0,0
+5,Repair,328,254,isk_repair,1,INT,0,1,,,SKILL_REPAIR,0,0,6,0,4,1,3,1,3,0,6,0,8,0,8,1,2,0,6,0,8,1,2,0,6,1,1,1,1,1,1,1,1
+6,Security,329,256,isk_security,0,INT,0,1,,,SKILL_SECURITY,0,1,3,0,5,0,6,0,7,0,7,1,5,1,5,0,7,0,7,1,5,0,7,0,7,1,7,1,3,1,4,1,1
+7,TreatInjury,330,258,isk_treatinj,1,WIS,0,1,,,SKILL_TREAT_INJURY,0,0,5,1,1,1,5,1,2,1,1,1,6,0,7,1,3,1,1,1,6,1,3,1,2,0,2,0,,0,,0,1

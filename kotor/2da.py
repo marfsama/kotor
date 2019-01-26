@@ -4,12 +4,13 @@ import argparse
 import os
 import io
 import itertools
-import csv 
+import csv
 
 
 from openpyxl import Workbook, load_workbook
 from tools import *
 from collections import OrderedDict
+
 
 class Header:
     def __init__(self, file):
@@ -19,6 +20,7 @@ class Header:
     def __str__(self):
         return """{name}: {{magic: "{marker}{version}"}}""".format(name=type(self).__name__, **vars(self))
 
+
 class TabularDataFile:
     def __init__(self, column_names, rows):
         self.column_names = column_names
@@ -27,18 +29,18 @@ class TabularDataFile:
     def __str__(self):
         return """{name}: {{columns: {column_names}, rows: {rows}}}""".format(name=type(self).__name__, **vars(self))
 
-def execute_action(parsed, keyFile):
-    switcher= {
-        "list" : list_entries,
-        "update" : update_entry,
-        "extract" : extract_entry,
-        "delete" : delete_entry
-    }
-    func = switcher.get(parsed.action, lambda: print("You need to specify one of -l, -u, -x, -d"))
-    func(parsed, keyFile)
+
+#def execute_action(parsed, key_file):
+#    switcher = {
+#        "extract": extract_entry,
+#        "delete": delete_entry
+#    }
+#    func = switcher.get(parsed.action, lambda: print("You need to specify one of -l, -u, -x, -d"))
+#    func(parsed, key_file)
+
 
 def read_tokens(file):
-    """
+    r"""
         returns tokens separated by \x00 or tab
     """
     current_column = ""
@@ -49,10 +51,9 @@ def read_tokens(file):
         else:
             current_column = current_column + byte.decode("utf-8")
 
+
 def read_token_list(file):
-    """
-        reads tokens until an empty token is encountered
-    """
+    """reads tokens until an empty token is encountered."""
     for token in read_tokens(file):
         if not token:
             break
@@ -63,7 +64,7 @@ def read_file(file_name):
     with open(file_name, "rb") as file:
         header = Header(file)
         if header.version != "V2.b":
-            print ("wrong version. supported is V2.b, version is", header.version)
+            print("wrong version. supported is V2.b, version is", header.version)
             return
         # skip new line
         file.read(1)
@@ -83,7 +84,7 @@ def read_file(file_name):
 
         # parse cell contents from string data
         cell_offset_index = 0
-        rows = OrderedDict() # note: use OrderedDict to keep entries and iterations in insertion order
+        rows = OrderedDict()  # note: use OrderedDict to keep entries and iterations in insertion order
         for row_index in row_indices:
             row = []
             for column_name in column_names:
@@ -95,16 +96,18 @@ def read_file(file_name):
 
         return TabularDataFile(column_names, rows)
 
+
 def get_output_filename(parsed):
     if parsed.output:
         return parsed.output
     filename = os.path.split(parsed.input)[1]
     basename = os.path.splitext(filename)[0]
     format_extensions = {
-        "excel" : "xlsx",
-        "csv" : "csv"
+        "excel": "xlsx",
+        "csv": "csv"
     }
     return basename + '.' + format_extensions[parsed.format]
+
 
 def extract_csv(parsed):
     tabular_data_file = read_file(parsed.input)
@@ -117,7 +120,7 @@ def extract_csv(parsed):
         output.write(csv_delimiter.join(tabular_data_file.column_names))
         output.write('\n')
         for row, values in tabular_data_file.rows.items():
-            output.write(row+ csv_delimiter)
+            output.write(row + csv_delimiter)
             output.write(csv_delimiter.join(values))
             output.write('\n')
 
@@ -130,10 +133,10 @@ def extract_excel(parsed):
     # grab the active worksheet
     ws = wb.active
     # Rows can also be appended
-    ws.append(['index']+ tabular_data_file.column_names)
+    ws.append(['index'] + tabular_data_file.column_names)
 
     for row, values in tabular_data_file.rows.items():
-        ws.append([row]+values)
+        ws.append([row] + values)
 
     # Save the file
     wb.save(output_filename)
@@ -147,7 +150,6 @@ def read_excel_file(filename, parsed):
 
     # first line is column names (skip first column, which is the row index)
     column_names = [cell.value for cell in sheet_rows[0][1:]]
-
 
     # read rows, saving the row index separately
     # note: use OrderedDict to keep entries and iterations in insertion order
@@ -168,13 +170,12 @@ def read_csv_file(filename, parsed):
 
         # read rows, saving the row index separately
         # note: use OrderedDict to keep entries and iterations in insertion order
-        rows = OrderedDict()    
+        rows = OrderedDict()
         for row in csv_rows[1:]:
             row_index = row[0]
             rows[row_index] = [cell for cell in row[1:]]
 
     return TabularDataFile(column_names, rows)
-    
 
 
 def write_2da_file(output_filename, tabular_data_file):
@@ -208,7 +209,7 @@ def write_2da_file(output_filename, tabular_data_file):
                 else:
                     value = cell
                 # if the value was not encountered before, save it.
-                if not value in unique_cell_values:
+                if value not in unique_cell_values:
                     unique_cell_values[value] = 0
 
         # write the cell values in byte stream, remembering the position it was written
@@ -221,7 +222,7 @@ def write_2da_file(output_filename, tabular_data_file):
         # get bytes stream from BytesIO
         cell_values_stream = byte_io.getvalue()
 
-        # write cell offsets 
+        # write cell offsets
         for row in tabular_data_file.rows.values():
             for cell in row:
                 # empty cell is ""
@@ -231,23 +232,24 @@ def write_2da_file(output_filename, tabular_data_file):
                     value = cell
                 offset = cell_values_offsets[value]
                 file.write((offset).to_bytes(2, byteorder='little'))
-        # write cell values data stream size 
+        # write cell values data stream size
         file.write((len(cell_values_stream)).to_bytes(2, byteorder='little'))
         # write cell values data
         file.write(cell_values_stream)
 
+
 def create_file(parsed):
-    switcher= {
-        ".csv" : read_csv_file,
-        ".xlsx" : read_excel_file
+    switcher = {
+        ".csv": read_csv_file,
+        ".xlsx": read_excel_file
     }
 
     extension = os.path.splitext(parsed.input)[1]
-    func = switcher.get(extension);
+    func = switcher.get(extension)
     if not func:
         print('unsupported file format')
         return
-    
+
     tabular_data_file = func(parsed.input, parsed)
 
     if parsed.output:
@@ -263,13 +265,14 @@ def create_file(parsed):
 def error(output_filename, tabular_data_file):
     print("You need to specify one of -x, -c")
 
+
 def execute_action(parsed):
     function = parsed.action+"_"+parsed.format
-    switcher= {
-        "extract_csv" : extract_csv,
-        "extract_excel" : extract_excel,
-        "create_csv" : create_file,
-        "create_excel" : create_file
+    switcher = {
+        "extract_csv": extract_csv,
+        "extract_excel": extract_excel,
+        "create_csv": create_file,
+        "create_excel": create_file
     }
     func = switcher.get(function, error)
     func(parsed)
@@ -291,5 +294,5 @@ def parse_command_line():
 def main():
     parse_command_line()
 
-main()
-
+if __name__ == "__main__":
+    main()
