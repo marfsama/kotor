@@ -3,18 +3,17 @@
 import argparse
 import os
 import json
+import io
 
 from functools import partial
 from collections import OrderedDict
 
 from kotor.tools import *
+from .base import Array, Vertex, Quaternion, Face
 
 # TODO: evaluate part numbers for models with super models. @see: http://web.archive.org/web/20050213205343/torlack.com/index.html?topics=nwndata_binmdl
 
 # based on xoreos/src/graphics/aurora/model_kotor.cpp from https://github.com/xoreos/xoreos
-
-# size of file header. each offset in mdl must be adjusted by the header offset.
-HEADER_OFFSET = 12
 
 
 class Model:
@@ -35,16 +34,16 @@ class NodeHeader:
             self.controller_data = Array(file)
 
     def read_node(self, file):
-        file.seek(self.child_offsets.offset + HEADER_OFFSET)
+        file.seek(self.child_offsets.offset)
         with self.parent_block.block("NodeHeader.child_offsets", file):
             self.child_offsets.data = readlist(readu32, file, self.child_offsets.allocated_entries) 
 
         if self.controllers.allocated_entries > 0:
-            file.seek(self.controllers.offset + HEADER_OFFSET)
+            file.seek(self.controllers.offset)
             with self.parent_block.block("Controller.array", file):
                 self.controllers.data = readlist(Controller, file, self.controllers.allocated_entries)
 
-            file.seek(self.controller_data.offset + HEADER_OFFSET)
+            file.seek(self.controller_data.offset)
             with self.parent_block.block("Controller.data", file):
                 self.controller_data.data = readlist(readfloat, file, self.controller_data.allocated_entries)
 
@@ -176,27 +175,27 @@ class MeshHeader:
 
     def read_node(self, file):
         # read vertex count array and vertex offset array
-        file.seek(self.vertex_count_array.offset+HEADER_OFFSET)
+        file.seek(self.vertex_count_array.offset)
         with self.parent_block.block("MeshHeader.vertex_count_array", file):
             self.vertex_count_array.data = readlist(readu32, file, self.vertex_count_array.allocated_entries)
 
-        file.seek(self.vertex_offset_array.offset+HEADER_OFFSET)
+        file.seek(self.vertex_offset_array.offset)
         with self.parent_block.block("MeshHeader.vertex_offset_array", file):
             self.vertex_offset_array.data = readlist(readu32, file, self.vertex_offset_array.allocated_entries)
             # note: directly after this array there is an unknown 32bit value.
 
         # read faces
-        file.seek(self.faces.offset+HEADER_OFFSET)
+        file.seek(self.faces.offset)
         with self.parent_block.block("MeshHeader.face_array", file):
             self.faces.data = readlist(Face, file, self.faces.allocated_entries)
         
         # read vertex coordinates
-        file.seek(self.vertex_coordinates_offset+HEADER_OFFSET)
+        file.seek(self.vertex_coordinates_offset)
         with self.parent_block.block("MeshHeader.vertex_array", file):
             self.vertices = readlist(Vertex, file, self.vertex_count)
 
         # read vertex indices
-        file.seek(self.vertex_offset_array.data[0]+HEADER_OFFSET)
+        file.seek(self.vertex_offset_array.data[0])
         with self.parent_block.block("MeshHeader.vertex_indices_array", file):
             self.vertex_indices = readlist(readu16, file, self.vertex_count_array.data[0])
 
@@ -221,22 +220,22 @@ class SkinMeshHeader:
 
     def read_node(self, file):
         # read bone map
-        file.seek(self.bone_map_offset+HEADER_OFFSET)
+        file.seek(self.bone_map_offset)
         with self.parent_block.block("SkinMeshHeader.bone_map", file):
             self.bone_map = readlist(readu32, file, self.bone_map_count)
 
         # 4 floats each node. rotation quaternion?
-        file.seek(self.bone_quaternions.offset+HEADER_OFFSET)
+        file.seek(self.bone_quaternions.offset)
         with self.parent_block.block("SkinMeshHeader.bone_quaternions", file):
             self.bone_quaternions .data = readlist(readfloat, file, self.bone_quaternions.allocated_entries*4)
     
         # 3 floats each node. translation?
-        file.seek(self.bone_vertices.offset+HEADER_OFFSET)
+        file.seek(self.bone_vertices.offset)
         with self.parent_block.block("SkinMeshHeader.bone_vertices", file):
             self.bone_vertices.data = readlist(readfloat, file, self.bone_vertices.allocated_entries*3)
 
         # 1 floats each node. scale/length of bone?
-        file.seek(self.bone_constants.offset+HEADER_OFFSET)
+        file.seek(self.bone_constants.offset)
         with self.parent_block.block("SkinMeshHeader.bone_constants", file):
             self.bone_constants.data = readlist(readfloat, file, self.bone_constants.allocated_entries)
 
@@ -259,12 +258,12 @@ class DanglyMeshHeader:
         self.unknown_array = []
 
     def read_node(self, file):
-        file.seek(self.constraints.offset+HEADER_OFFSET)
+        file.seek(self.constraints.offset)
         with self.parent_block.block("DanglyMeshHeader.constraints", file):
             self.constraints.data = readlist(readfloat, file, self.constraints.allocated_entries)
 
         # read unknown array. same size as constraints, 3 floats for each entry
-        file.seek(self.unknown_array_offset+HEADER_OFFSET)
+        file.seek(self.unknown_array_offset)
         with self.parent_block.block("DanglyMeshHeader.unknown_array", file):
             self.unknown_array = readlist(readfloat, file, self.constraints.allocated_entries*3)
 
@@ -286,7 +285,7 @@ class AabbHeader:
         self.aabb_tree = None
 
     def read_node(self, file):
-        file.seek(self.entry_point_offset+HEADER_OFFSET)
+        file.seek(self.entry_point_offset)
         self.aabb_tree = AabbEntry(file,  self.parent_block)
         self.aabb_tree.read_childs(file,  self.parent_block)
 
@@ -308,12 +307,12 @@ class AabbEntry:
 
     def read_childs(self, file,  parent_block):
         if self.left_node_offset > 0:
-            file.seek(self.left_node_offset+HEADER_OFFSET)
+            file.seek(self.left_node_offset)
             self.left_node = AabbEntry(file,  parent_block)
             self.left_node.read_childs(file,  parent_block)
             
         if self.right_node_offset > 0:
-            file.seek(self.right_node_offset+HEADER_OFFSET)
+            file.seek(self.right_node_offset)
             self.right_node = AabbEntry(file,  parent_block)
             self.right_node.read_childs(file,  parent_block)
 
@@ -421,12 +420,12 @@ class ModelHeader:
         self.animations = []
 
     def read_animations(self, file):
-        file.seek(self.animation_offset_array.offset+HEADER_OFFSET)
+        file.seek(self.animation_offset_array.offset)
         with self.parent_block.block("Animations.offset_array", file):
             self.animation_offset_array.data = readlist(readu32, file, self.animation_offset_array.allocated_entries)
 
         for offset in self.animation_offset_array.data:
-            file.seek(offset+HEADER_OFFSET)
+            file.seek(offset)
             animation_header = AnimationHeader(file, self.parent_block)
             animation_header.read_events(file)
             animation_header.read_animation_node(file)
@@ -454,7 +453,7 @@ class AnimationHeader:
 
     def read_events(self, file):
         if self.events.allocated_entries > 0:
-            file.seek(self.events.offset + HEADER_OFFSET)
+            file.seek(self.events.offset)
             with self.parent_block.block("Animations.events", file):
                 self.events.data = readlist(Event, file, self.events.allocated_entries)
 
@@ -486,14 +485,14 @@ class NamesHeader:
 
     def read_names(self, file):
         # seek to start of names offset table
-        file.seek(self.names_offset_array.offset + HEADER_OFFSET)
+        file.seek(self.names_offset_array.offset)
         with self.parent_block.block("Names.offset_array", file):
             names_offsets = readlist(readu32, file, self.names_offset_array.allocated_entries)
 
         self.names = []
-        block = self.parent_block.start_block("Names", names_offsets[0] + HEADER_OFFSET)
+        block = self.parent_block.start_block("Names", names_offsets[0])
         for name_offset in names_offsets:
-            file.seek(name_offset + HEADER_OFFSET)
+            file.seek(name_offset)
             self.names.append(next(read_terminated_token(file, null_terminated)).decode("utf-8"))
         block.close_block(file.tell())
 
@@ -524,7 +523,7 @@ class Node:
 
 
 def read_node_tree(file, node_offset, parent_block):
-    file.seek(node_offset + HEADER_OFFSET)
+    file.seek(node_offset)
     node = Node(file, parent_block)
     # read header
     for node_type in node.node_types:
@@ -555,14 +554,20 @@ def read_model_file(filename, block):
     with open(filename, "rb") as file:
         model = Model()
         model.header = Header(file, block)
-        model.geometry_header = GeometryHeader(file, block)
-        model.model_header = ModelHeader(file, block)
-        model.names_header = NamesHeader(file, block)
-        # read animations
-        model.model_header.read_animations(file)
+        
+        # read entire model data into memory
+        model_data = file.read(model.header.mdl_size)
+        # read remaining model data from byte stream
+        data_file = io.BytesIO(model_data)
 
-        model.names_header.read_names(file)
-        model.root_node = read_node_tree(file, model.names_header.root_node, block)
+        model.geometry_header = GeometryHeader(data_file, block)
+        model.model_header = ModelHeader(data_file, block)
+        model.names_header = NamesHeader(data_file, block)
+        # read animations
+        model.model_header.read_animations(data_file)
+
+        model.names_header.read_names(data_file)
+        model.root_node = read_node_tree(data_file, model.names_header.root_node, block)
         # update names
         visit_tree(model.root_node, Node.get_childs, partial(update_node_name, model.names_header.names))
         # create node dictionary by name and id
@@ -722,7 +727,8 @@ def parse_command_line():
 
 
     parsed = parser.parse_args()
-    parsed.func(parsed)
+    if parsed.func:
+        parsed.func(parsed)
 
 #    print_block(block, parsed.input)
 
