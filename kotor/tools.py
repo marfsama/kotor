@@ -137,7 +137,8 @@ class Block:
         return self
 
     def __exit__(self, type, value, traceback):
-        self.close_block(self.file.tell())
+        if self.file:
+            self.close_block(self.file.tell())
 
     def close_block(self, end):
         self.end = end

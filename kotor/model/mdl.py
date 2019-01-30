@@ -34,22 +34,15 @@ class NodeHeader:
             self.controller_data = Array(file)
 
     def read_node(self, file):
-        file.seek(self.child_offsets.offset)
-        with self.parent_block.block("NodeHeader.child_offsets", file):
-            self.child_offsets.data = readlist(readu32, file, self.child_offsets.allocated_entries) 
+        self.child_offsets.read_data(file, readu32, self.parent_block.block("NodeHeader.child_offsets", file))
 
         if self.controllers.allocated_entries > 0:
-            file.seek(self.controllers.offset)
-            with self.parent_block.block("Controller.array", file):
-                self.controllers.data = readlist(Controller, file, self.controllers.allocated_entries)
+            self.controllers.read_data(file, Controller, self.parent_block.block("Controller.array", file))
+            self.controller_data.read_data(file, readfloat, self.parent_block.block("Controller.data", file))
 
-            file.seek(self.controller_data.offset)
-            with self.parent_block.block("Controller.data", file):
-                self.controller_data.data = readlist(readfloat, file, self.controller_data.allocated_entries)
-
-        # each controller can read its values from the data array
-        for controller in self.controllers.data:
-            controller.read_data_rows(self.controller_data.data)
+            # each controller can read its values from the data array
+            for controller in self.controllers.data:
+                controller.read_data_rows(self.controller_data.data)
 
     def __serialize__(self):
         base_attributes = object_attributes_to_ordered_dict(self,  ['parent_node', 'node_id' , 'parent_node_start',  'position', 'rotation', 'child_offsets', 'controllers', 'controller_data'])
