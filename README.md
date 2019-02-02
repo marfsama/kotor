@@ -1,4 +1,7 @@
 # kotor
+[![Build Status](https://travis-ci.org/marfsama/kotor.svg?branch=master)](https://travis-ci.org/marfsama/kotor)
+[![Coverage Status](https://codecov.io/gh/marfsama/kotor/branch/master/graph/badge.svg)](https://codecov.io/gh/marfsama/kotor)
+
 Some Knights Of The Old Republic Tools for creating command line toolchains.
 
 ## key.py
