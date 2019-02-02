@@ -27,7 +27,7 @@ class NodeHeader:
         with parent_block.block("NodeHeader", file):
             self.parent_node = readu16(file)
             self.node_id = readu16(file)
-            file.read(4+2)  # unknown
+            self.unknown = file.read(4+2)
             self.parent_node_start = readu32(file)
             self.position = Vertex(file)
             self.rotation = Quaternion(file)
@@ -36,18 +36,18 @@ class NodeHeader:
             self.controller_data = Array(file)
 
     def read_node(self, file):
-        self.child_offsets.read_data(file, readu32, self.parent_block.block("NodeHeader.child_offsets", file))
+        self.child_offsets.read_data(file, readu32, self.parent_block.block("NodeHeader.child_offsets"))
 
         if self.controllers.allocated_entries > 0:
-            self.controllers.read_data(file, Controller, self.parent_block.block("Controller.array", file))
-            self.controller_data.read_data(file, readfloat, self.parent_block.block("Controller.data", file))
+            self.controllers.read_data(file, Controller, self.parent_block.block("Controller.array"))
+            self.controller_data.read_data(file, readfloat, self.parent_block.block("Controller.data"))
 
             # each controller can read its values from the data array
             for controller in self.controllers.data:
                 controller.read_data_rows(self.controller_data.data)
 
     def __serialize__(self):
-        base_attributes = object_attributes_to_ordered_dict(self,  ['parent_node', 'node_id', 'parent_node_start',  'position', 'rotation', 'child_offsets', 'controllers', 'controller_data'])
+        base_attributes = object_attributes_to_ordered_dict(self,  ['parent_node', 'node_id', 'unknown', 'parent_node_start',  'position', 'rotation', 'child_offsets', 'controllers', 'controller_data'])
         base_attributes["controllers"] = self.controllers.data
         return base_attributes
 
@@ -159,22 +159,22 @@ class MeshHeader:
     def read_node(self, file):
         # read vertex count array and vertex offset array
         file.seek(self.vertex_count_array.offset)
-        with self.parent_block.block("MeshHeader.vertex_count_array", file):
+        with self.parent_block.block("MeshHeader.vertex_count_array"):
             self.vertex_count_array.data = readlist(readu32, file, self.vertex_count_array.allocated_entries)
 
         file.seek(self.vertex_offset_array.offset)
-        with self.parent_block.block("MeshHeader.vertex_offset_array", file):
+        with self.parent_block.block("MeshHeader.vertex_offset_array"):
             self.vertex_offset_array.data = readlist(readu32, file, self.vertex_offset_array.allocated_entries)
             # note: directly after this array there is an unknown 32bit value.
 
         # read faces
         file.seek(self.faces.offset)
-        with self.parent_block.block("MeshHeader.face_array", file):
+        with self.parent_block.block("MeshHeader.face_array"):
             self.faces.data = readlist(Face, file, self.faces.allocated_entries)
 
         # read vertex coordinates
         file.seek(self.vertex_coordinates_offset)
-        with self.parent_block.block("MeshHeader.vertex_array", file):
+        with self.parent_block.block("MeshHeader.vertex_array"):
             self.vertices = readlist(Vertex, file, self.vertex_count)
 
         # read vertex indices
