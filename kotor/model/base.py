@@ -9,11 +9,12 @@ class Array:
         self.data = []
         
     def read_data(self,  file,  read_element_function,  block = Block("doof", 0)):
-        file.seek(self.offset)
-        with block:
-            self.data = readlist(read_element_function, file, self.used_entries)
-            # read unused but allocated data
-            readlist(read_element_function, file, self.allocated_entries - self.used_entries)
+        if self.allocated_entries:
+            file.seek(self.offset)
+            with block:
+                self.data = readlist(read_element_function, file, self.used_entries)
+                # read unused but allocated data
+                readlist(read_element_function, file, self.allocated_entries - self.used_entries)
 
     def __serialize__(self):
         return object_attributes_to_ordered_dict(self,  ['offset', 'used_entries','allocated_entries'])
