@@ -2,12 +2,13 @@
 
 import kotor.model.base as base
 import kotor.tools as tools
+from .testutil import *
 import io
 import struct
 
 
 def test_array_read():
-    file = io.BytesIO(bytearray([0x01,  0x02,  0x03,  0x04,  0x05,  0x00,  0x00,  0x00,  0x05,  0x00,  0x00,  0x00]))
+    file = io.BytesIO(struct.pack("3i",  0x04030201,  5, 5))
     array = base.Array(file)
     assert array
     assert array.offset == 0x04030201
@@ -47,7 +48,7 @@ def test_array_serialize():
 
 
 def test_face_read():
-    file = io.BytesIO(bytearray(struct.pack("4fi6h",  1.0, 2.0, 3.0, 4.0, 5, 10, 11, 12,  20,  21,  22)))
+    file = io.BytesIO(struct.pack("4fi6h",  1.0, 2.0, 3.0, 4.0, 5, 10, 11, 12,  20,  21,  22))
     face = base.Face(file)
     assert face.plane_normal.x == 1.0
     assert face.plane_normal.y == 2.0
@@ -58,7 +59,7 @@ def test_face_read():
 
 
 def test_face_serialize():
-    file = io.BytesIO(bytearray(struct.pack("4fi6h",  1.0, 2.0, 3.0, 4.0, 5, 10, 11, 12,  20,  21,  22)))
+    file = io.BytesIO(struct.pack("4fi6h",  1.0, 2.0, 3.0, 4.0, 5, 10, 11, 12,  20,  21,  22))
     face = base.Face(file)
     serialized = face.__serialize__()
     assert 'plane_normal' in serialized
@@ -101,15 +102,3 @@ def test_quaternion_serialize():
     assert 'x' in serialized
     assert 'y' in serialized
     assert 'z' in serialized
-
-
-class SeekLoggingBytesIO(io.BytesIO):
-    def __init__(self,  data):
-        super(SeekLoggingBytesIO,  self).__init__(data)
-        self.seeks = []
-
-    def seek(self,  value):
-        self.seeks.append(value)
-        
-    def tell(self):
-        return super(SeekLoggingBytesIO,  self).tell()
