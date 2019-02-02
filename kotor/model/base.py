@@ -27,8 +27,8 @@ class Face:
         self.adjected_faces = readlist(readu16, file, 3)
         self.vertex_indices = readlist(readu16, file, 3)
 
-    def __str__(self):
-        return """{type_name}: {{plane_normal: {plane_normal}, plane_distance: {plane_distance}, surface: {surface}, adjected_faces: {adjected_faces}, vertex_indices: {vertex_indices}}}""".format(type_name=type(self).__name__, **vars(self))
+    def __serialize__(self):
+        return object_attributes_to_ordered_dict(self,  ['plane_normal', 'plane_distance', 'adjected_faces',  'vertex_indices'])
 
 
 class Vertex:
