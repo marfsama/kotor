@@ -2,10 +2,10 @@
 
 import argparse
 
-from tools import *
+from kotor.tools import *
 from hurry.filesize import size
 
-from key import BuildDate, ressourceTypeTable, RessourceType
+from kotor.key import BuildDate, ressourceTypeTable, RessourceType
 
 class ErfFile:
     def __init__(self, header, entries):

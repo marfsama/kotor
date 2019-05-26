@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from tools import *
+from kotor.tools import *
 
 # size of byte chunks to read
 CHUCK_SIZE = 4096

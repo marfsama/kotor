@@ -5,3 +5,4 @@ pyglbuffers
 pillow
 hurry.filesize
 openpyxl
+panda3d

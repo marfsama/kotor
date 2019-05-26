@@ -2,11 +2,11 @@
 
 import argparse
 import os
-import bif
-
-from tools import *
 from datetime import datetime, timedelta
 from hurry.filesize import size
+
+import kotor.bif as bif
+from kotor.tools import *
 
 class RessourceType:
     def __init__(self, id, extension, description):

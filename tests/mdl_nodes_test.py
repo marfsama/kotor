@@ -60,3 +60,22 @@ def test_node_header_read():
     assert assert_array(node_header.child_offsets) == [1, 2, 3]
     assert assert_array(node_header.controllers) == [2, 3, 4]
     assert assert_array(node_header.controller_data) == [3, 4, 5]
+
+
+def test_node_header_serialize():
+    input = struct.pack("=hh hhh i fff ffff iii iii iii", 1, 2, 3, 4, 5, 0x06070809, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 1, 2, 3, 2, 3, 4, 3, 4, 5)
+    file = io.BytesIO(input)
+    node_header = nodes.NodeHeader(file, tools.Block("root",  0,  file))
+    serialized = node_header.__serialize__()
+    assert 'parent_node' in serialized
+    assert 'node_id' in serialized
+    assert 'unknown' in serialized
+    assert 'parent_node_start' in serialized
+    assert 'position' in serialized
+    assert 'rotation' in serialized
+    assert 'child_offsets' in serialized
+    assert 'controllers' in serialized
+    assert 'controller_data' in serialized
+
+
+
