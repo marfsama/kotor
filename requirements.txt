@@ -6,3 +6,5 @@ pillow
 hurry.filesize
 openpyxl
 panda3d
+pytest
+pytest-cov

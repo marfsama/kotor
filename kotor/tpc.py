@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import argparse
 
 from kotor.tools import *
@@ -35,8 +33,8 @@ class DX1Texel:
 
     def get_pixel(self, x, y):
         pos = y * 4 + x
-        pos = (self.pixels >> (pos * 2)) & 3 
-        return self.colors[pos]
+        color_index = (self.pixels >> (pos * 2)) & 3
+        return swapByte1And3(self.colors[color_index])
 
 
 class DX5Texel:
@@ -118,7 +116,7 @@ def extract(parsed, tpc_file):
                 for dy in range(0, 4):
                     for dx in range(0, 4):
                         pixel = texel.get_pixel(dx, dy)
-                        draw.point( (x+dx, (header.height-1)-(y+dy)) ,  swapByte1And3(pixel))
+                        draw.point( (x+dx, (header.height-1)-(y+dy)) ,  pixel)
 
         img.save(tpc_file+'.png')
         return img
@@ -145,5 +143,6 @@ def parse_command_line():
 def main():
     parse_command_line()
 
-main()
+if __name__ == "__main__":
+    main()
 
